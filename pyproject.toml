@@ -26,11 +26,19 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-bam = ["pysam>=0.22"]
+# `bam` covers both readers: nothing in the suite reads a BAM without also
+# needing BigWig signal, and a two-extra install was the first thing users
+# got wrong. `bigwig` stays as a standalone alias for the track reader.
+bam = ["pysam>=0.22", "pyBigWig>=0.3.22"]
 bigwig = ["pyBigWig>=0.3.22"]
+# matplotlib is only imported when a figure is requested.
+viz = ["matplotlib>=3.7"]
+# hmmlearn is only needed by `easyepi histone-states`.
+states = ["hmmlearn>=0.3"]
 activity = ["decoupler>=1.9.2,<2"]
 motif = ["biopython>=1.81"]
-dev = ["pytest>=8", "build>=1.2"]
+dev = ["pytest>=8", "build>=1.2", "mkdocs>=1.6",
+       "mkdocs-material>=9.5", "mkdocstrings[python]>=0.24"]
 # Multi-track clustering uses scikit-learn only; statsmodels is not imported
 # anywhere in the package and is intentionally not listed.
 stats = ["scikit-learn>=1.3"]

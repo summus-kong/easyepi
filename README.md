@@ -1,95 +1,174 @@
-﻿# Easyepi
+# easyepi
 
-A Python toolkit of independent bulk epigenomics analysis modules. Run only the step you need, on one sample or multiple samples. Group labels and controls are optional until a method explicitly requires them. There is no fixed pipeline or standard/discovery mode.
-
-Application code is Python. Optional established tools execute their own published methods: MACS3 for peaks, ChromHMM for chromatin states, MEME/FIMO or HOMER for motif analysis, and decoupler for regulator activity. No R runtime or R backend is used.
-
-## Install
-
-The supported runtime is Linux with Python 3.11 or newer. Use a dedicated environment:
+Bulk epigenomics downstream analysis in pure Python. Every tool takes an aligned
+**BAM** and writes ordinary files (BigWig, BED, TSV, JSON, PNG). No external caller
+is required, and no step depends on another having been run first.
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -e .
-python -m pip install -e ".[bam,bigwig,motif,stats,activity,dev]"
+pip install -e ".[bam,viz]"      # pysam, pyBigWig, matplotlib, hmmlearn
 ```
 
-Install only the extras needed for your analysis. MACS3, Java/ChromHMM, MEME Suite and HOMER are separate optional installations. Development targets Linux only; native Windows support is outside the scope.
+## The chain (each step optional)
 
-A reproducible Linux environment specification is provided in [environment.yml](environment.yml). Linux CI runs the API suite, all script help entries, BAM/BigWig reader integration and ULM smoke checks. CI results are pending until the workflow runs.
+```
+BAM ──bam2bw──> BigWig ──peaks──> peaks ──annotate──> gene assignment
+ │                  │                │
+ │                  │                └──tf-annotate──> named TFs
+ │                  ├──footprint──> accessibility profile
+ │                  ├──gene-panel─> multi-locus figure
+ │                  └──differential-peaks──> two-group comparison
+ │
+ └──qc──> library verdict          qc reads BAM, BigWig, peaks or a bisulfite BAM
+```
 
-## Start with an independent module
+A minimal run (ChIP/ATAC):
 
 ```bash
-python -m easyepi.universal.validate_project --project examples/project.toml --out results/validation --no-check-files
-python -m easyepi.specific.atac.qc --project project.toml --out results/atac_qc --verbose
-python -m easyepi.specific.atac.peaks --project project.toml --genome-size hs --out results/peaks
-python -m easyepi.universal.motif_enrichment --target peaks.fa --background matched.fa --pwm TF.pfm --out results/motifs
+easyepi bam2bw sample.bam -o tracks/ --assay atac      # 1. BAM -> BigWig
+easyepi peaks tracks/sample.bw -o peaks/ --assay atac   # 2. call peaks
+easyepi annotate peaks/sample.narrowPeak --gtf genes.gtf -o annot/
+easyepi qc --assay atac --bam sample.bam --out qc.json  # anywhere in the chain
 ```
 
-The example project references placeholder files; schema-only validation works without downloading them. Replace the paths before analysis. Each module accepts `--help`; Python functions can be imported directly. Existing `easyepi` CLI commands remain independent conveniences. Historical `peaks` and `nucleosome` metadata-only commands now reject execution and point to working modules.
+Single BAM or many; `--jobs` controls worker processes.
 
-## Documentation
+## Assays
 
-- [Complete usage and input contracts](docs/USAGE.md)
-- [QC commands, thresholds and batch roll-up](docs/QC.md)
-- [Python API](docs/PYTHON_API.md)
-- [Module and file map](docs/DEVELOPMENT.md)
-- [Reliability audit and remaining work](docs/RELIABILITY.md)
-- [Motif methods and interpretation](docs/MOTIF_BACKENDS.md)
-- [Release verification](docs/PUBLISHING.md)
-- [Actual verification results](docs/VERIFICATION.md)
-- [Method references](docs/REFERENCES.md)
+| Assay | Status | What it does |
+| --- | --- | --- |
+| **ATAC-seq** | full | Tn5 shift, FRiP, peak calling, footprint, nucleosome |
+| **ChIP-seq** (TF) | full | narrow/broad peaks, FRiP, signal enrichment |
+| **ChIP-seq** (histone) | full | broad peaks, chromatin states across marks |
+| **CUT&Tag / CUT&RUN** | full | same Tn5 path as ATAC |
+| **MNase-seq** | partial | occupancy and periodicity; dyad calling needs paired-end |
+| **WGBS / bisulfite** | full | per-cytosine calls and beta values read **from the BAM**; two-group DMR |
 
-## QC
+Methylation is read from the alignments themselves (`MM`/`ML` tags from samtools
+1.10+, or Bismark's `XM` tag), so a bisulfite BAM is the only input -- no separate
+`.cov`/`bedMethyl` table has to be produced first. A BAM carrying neither tag is
+refused with an explanation rather than treated as unmethylated.
 
-Assay-specific QC commands share one metric and verdict implementation, so the
-same sample gets identical numbers whichever command produced the report:
+## Commands
 
-```bash
-easyepi chip-qc    --project project.toml --annotation genes.gtf --out results/chip_qc
-easyepi atac-qc    --project project.toml --blacklist blacklist.bed --out results/atac_qc
-easyepi mnase-qc   --project project.toml --out results/mnase_qc --figure-format png
-easyepi methylation-qc --project project.toml --out results/meth_qc
-```
+### Prepare
+| Command | Purpose |
+| --- | --- |
+| `bam2bw` | BAM -> BigWig. Tn5 shift, CPM/RPKM, blacklist, run-length encoded write, `--jobs` |
 
-`qc` runs the same analysis for any assay via `--assay`; without it, `qc` keeps
-its original BAM-only summary. `make-qc-report` produces a batch-level
-`qc_report.json`, and `merge-qc-reports` combines several of those into one
-study-wide verdict summary:
+### Quality control
+| Command | Purpose |
+| --- | --- |
+| `qc --assay …` | One entry point; `--assay` selects the metric set and thresholds |
+| `make-qc-report`, `merge-qc-reports` | Batch and study-level roll-up |
 
-```bash
-easyepi make-qc-report    --project batch_01/project.toml --out batch_01
-easyepi merge-qc-reports  "batch_*/qc_report.json" --out study/qc_merged.json
-```
+`qc` is the single QC command. `atac-qc`, `chip-qc`, `histone-qc`, `mnase-qc` and
+`methylation-qc` remain as aliases of the same implementation.
 
-Thresholds are **advisory**: a breach always yields `warn`, never `fail`, and
-`overall` is only ever `pass`, `warn` or `not_evaluated`. Override the rule table
-per metric with `--qc-thresholds rules.json` or a `[qc_thresholds]` table in the
-project TOML (later wins; unspecified metrics keep defaults). Metrics that were
-never computed are reported as `not_evaluated`, never as pass.
+### Peaks
+| Command | Purpose |
+| --- | --- |
+| `peaks` | MACS3 wrapper, or the pure-Python Poisson caller; narrow or broad |
+| `differential-peaks` | Consensus peaks -> counts -> TMM -> negative binomial -> BH FDR |
+| `diff` | Exploratory two-group comparison of a normalised matrix |
 
-See [QC commands, thresholds and batch roll-up](docs/QC.md) for the full metric
-list, default thresholds, the migration path off `failures`, and the recommended
-multi-batch directory layout.
+### Annotation
+| Command | Purpose |
+| --- | --- |
+| `annotate` | Promoter / exon / intron / intergenic assignment from a GTF |
+| `gene-panel` | Multi-locus x multi-mark track figure with gene models |
 
-## Plotting
+### Motifs
+| Command | Purpose |
+| --- | --- |
+| `motifs` | Known or de-novo motif discovery in peak sequences |
+| `tf-annotate` | Name the TFs a peak can bind, with exact PWM thresholds |
 
-Analysis does not export figures by default. Functions return Matplotlib Figures:
+### Structure
+| Command | Purpose |
+| --- | --- |
+| `footprint` | Aggregate accessibility profile around motif sites, with significance |
+| `nucleosome` | Occupancy and periodicity from a signal track |
+| `nucleosome-positioning` | Dyad calls from paired-end fragments |
+
+### States and integration
+| Command | Purpose |
+| --- | --- |
+| `histone-states` | Chromatin states across marks (ChromHMM equivalent) |
+| `dmr` | Differential methylation regions between two groups of bisulfite BAMs |
+| `integrate` | Join assay layers over shared regions |
+| `normalize` | CPM / spike-in / RPGC scaling |
+
+### Figures
+| Command | Purpose |
+| --- | --- |
+| `viz` | Heatmaps, metagene profiles, sample correlation |
+| `washu` | Track manifest for the WashU Epigenome Browser |
+
+### Project
+| Command | Purpose |
+| --- | --- |
+| `init` | Write a project file from a folder of BAMs |
+| `validate-project` | Validate a project file and its paths |
+
+## Figures
+
+Analysis never writes a figure unless asked. Functions return Matplotlib Figures:
 
 ```python
 import pandas as pd
 from easyepi.plot import plot_volcano
 
 fig = plot_volcano(pd.read_csv("differential.tsv", sep="\t"))
-fig.savefig("volcano.pdf", bbox_inches="tight")  # Format and destination are your choice.
+fig.savefig("volcano.pdf", bbox_inches="tight")
 ```
 
-Modules with optional figure rendering accept repeated `--figure-format` arguments. Exporting a PDF does not also create PNG files.
+Commands accept repeated `--figure-format` (`png`, `pdf`, `svg`, `tiff`, `jpg`).
 
-## Status
+## Verification
 
-This is a release candidate undergoing method and input-contract validation. Unit tests establish software behavior, not biological validity. Exploratory signal comparisons are not count-model differential analysis; methylation site comparisons are not DMR calling; motif-associated accessibility is not direct TF binding. See the reliability audit before interpreting results.
+- `pytest tests -q` — 437 tests pass on Linux / Python 3.11
+- `maintenance/verify_linux.py` — CLI surface and module imports
+- `scripts/bench_coverage.py` — asserts the parallel coverage path produces
+  byte-identical tracks to the serial one
+- `scripts/verify_macs3_concordance.py` — the MACS3 wrapper produces byte-identical
+  peak files to a direct `macs3 callpeak` in three configurations
 
-License: BSD-3-Clause. Cite the underlying methods actually used and the software version; there is no assigned Easyepi paper or software DOI.
+Measured on a real ENCODE H3K4me3 BAM (chr1, 249 Mb, 25 bp bins):
+
+| Path | Wall clock |
+| --- | --- |
+| Original per-column pileup | 64 s |
+| Chunked, 1 process | 22.6 s |
+| Chunked, 48 processes, run-length write | 14.5 s |
+
+The remaining cost is BigWig I/O, not computation (compute 0.6 s, write 4.5 s after
+run-length encoding).
+
+## DMR
+
+```bash
+easyepi dmr --group-a ctrl1.bam,ctrl2.bam --group-b trt1.bam,trt2.bam \
+    --label-a control --label-b treated --out dmr/regions.tsv
+```
+
+Two groups, any number of BAMs each. Sites are kept strand-specific; a per-site Wald
+test on the log odds ratio with a Haldane-Anscombe correction, BH FDR, then
+significant sites within `--max-gap` bp merge into regions whose p-value is
+recomputed from the **summed** counts rather than from the smallest member.
+
+Writes `regions.tsv`, `regions.sites.tsv` and `regions.json` (the JSON records every
+parameter and the method's limitation).
+
+**Limitation, stated in the output as well:** the test is binomial, not
+beta-binomial. Methylation data is overdispersed relative to binomial, so p-values
+are anti-conservative at high coverage and unstable at low coverage. `--min-coverage`
+(default 5, applied per group) and `--min-diff` mitigate this but do not replace a
+beta-binomial caller for publication-grade work.
+
+## Not covered
+
+Single-cell ATAC, Hi-C/TAD, gene-set enrichment (GO/KEGG), and direct comparison
+against published callers for the pure-Python algorithms other than MACS3. See
+[docs/RELIABILITY.md](docs/RELIABILITY.md) before interpreting results.
+
+License: BSD-3-Clause.

@@ -84,6 +84,25 @@ def resolve_inputs(args) -> dict[str, dict[str, str]]:
     can scan a directory and then override one file.
     """
     resolved: dict[str, dict[str, str]] = {}
+
+    # ``--project`` is the documented way to run QC over a whole study. It was
+    # never read here, so ``qc --project`` reported "no inputs". The project is
+    # resolved first and explicit flags may still override individual tracks.
+    project_path = getattr(args, "project", None)
+    if project_path:
+        from easyepi.project import load_project
+
+        config = load_project(project_path)
+        if not config.samples:
+            raise ValueError(f"{project_path} defines no samples")
+        for sample in config.samples:
+            entry = resolved.setdefault(sample.sample_id, {})
+            for kind, value in (("bam", sample.bam), ("bigwig", sample.bigwig),
+                                ("peak", sample.peak),
+                                ("methylation", sample.methylation)):
+                if value:
+                    entry[kind] = str(value)
+
     for kind, attr, exts in (("bam", "bam", BAM_EXTS),
                              ("bigwig", "bigwig", BIGWIG_EXTS),
                              ("peak", "peak", PEAK_EXTS)):

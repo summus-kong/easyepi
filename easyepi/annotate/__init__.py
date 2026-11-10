@@ -11,6 +11,8 @@ plus the CLI wrapper ``run_annotate``.
 
 from __future__ import annotations
 
+import gzip
+
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -22,7 +24,11 @@ import numpy as np
 def _read_gtf_txs(gtf: str) -> List[dict]:
     """ read gtf txs helper."""
     genes, exons, cds = {}, defaultdict(list), defaultdict(list)
-    with open(gtf, encoding="utf-8", errors="replace") as handle:
+    # Gencode and Ensembl annotations are normally distributed gzip-compressed,
+    # so a plain open() would try to parse binary and fail with a confusing
+    # unpack error rather than saying the file is compressed.
+    _opener = gzip.open if str(gtf).endswith(".gz") else open
+    with _opener(gtf, "rt", encoding="utf-8", errors="replace") as handle:
         for line in handle:
             if line.startswith("#") or not line.strip():
                 continue

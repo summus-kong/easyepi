@@ -14,6 +14,62 @@ from pathlib import Path
 
 from easyepi import __version__
 
+#: Assay labels accepted by ``bam2bw``/``qc``. Kept next to the version import so
+#: both parsers read one definition; a second copy would drift.
+#: One working command per subcommand, shown when its required arguments are
+#: missing. argparse prints a usage wall that a first-time user cannot act on;
+#: an example they can paste is what actually unblocks them.
+MINIMAL_EXAMPLE: dict[str, str] = {
+    "bam2bw": "easyepi bam2bw sample.bam -o tracks/ --assay atac",
+    "qc": "easyepi qc --assay atac --bam sample.bam --out qc.json",
+    "peaks": "easyepi peaks tracks/sample.bw -o peaks/ --assay atac",
+    "annotate": "easyepi annotate peaks/sample.narrowPeak --gtf genes.gtf -o annot/",
+    "tf-annotate": "easyepi tf-annotate --peaks p.narrowPeak --genome-fasta g.fa "
+                   "--motifs jaspar.pfm --out motifs/",
+    "motifs": "easyepi motifs --peaks p.narrowPeak --genome-fasta g.fa "
+              "--motifs jaspar.pfm --out motifs/",
+    "footprint": "easyepi footprint --bigwig cut.bw --target sites.bed "
+                 "--chrom chr1 --start 0 --end 1000000 --out fp/",
+    "nucleosome": "easyepi nucleosome --bigwig mnase.bw --out nuc/",
+    "nucleosome-positioning": "easyepi nucleosome-positioning --bam paired.bam "
+                              "--chrom chr1 --start 0 --end 1000000 --out np/",
+    "gene-panel": "easyepi gene-panel --bigwig a.bw,b.bw --gtf genes.gtf "
+                  "--gene AGRN,TP73 --out panel/ --figure-format png",
+    "differential-peaks": "easyepi differential-peaks --peaks ctrl1,ctrl2 "
+                          "--bam-dir bams --peak-dir peaks --group-a ctrl1 "
+                          "--out diff.tsv",
+    "dmr": "easyepi dmr --group-a ctrl.bam --group-b trt.bam --out dmr/regions.tsv",
+    "histone-states": "easyepi histone-states --signal H3K4me3=a.bg,H3K27ac=b.bg "
+                      "--chrom chr1 --start 0 --end 5000000 --out states/",
+    "integrate": "easyepi integrate --gene-bed genes.bed --track S=a.bw --out int/",
+    "normalize": "easyepi normalize --matrix counts.tsv --factors f.tsv --out norm.tsv",
+    "diff": "easyepi diff --project project.toml --out diff/",
+    "viz": "easyepi viz --regions regions.bed --out viz/ --figure-format png",
+    "washu": "easyepi washu --manifest tracks.tsv --out washu/",
+    "init": "easyepi init /data/bams --out project.toml",
+    "validate-project": "easyepi validate-project --project project.toml --out v/",
+    "make-qc-report": "easyepi make-qc-report --project project.toml --out batch/",
+    "merge-qc-reports": "easyepi merge-qc-reports \"batch_*/qc_report.json\" --out study/",
+}
+
+
+class EasyepiParser(argparse.ArgumentParser):
+    """ArgumentParser that ends a usage error with a runnable example."""
+
+    def error(self, message: str):
+        program = self.prog.split()[-1] if self.prog else ""
+        example = MINIMAL_EXAMPLE.get(program)
+        text = f"{self.prog}: {message}"
+        if example:
+            text += ("\n  a working command looks like:\n    " + example)
+        text += ("\n  run with --help for the full option list")
+        self.print_usage(sys.stderr)
+        self.exit(2, text + "\n")
+
+
+ASSAY_CHOICES_FOR_CLI = ("atac", "cut&tag", "cut&run", "chip",
+                         "histone", "mnase", "methylation")
+
 
 def _cmd_merge_qc_reports(args):
     from easyepi.qc_report_merge import collect_reports, merge_reports
@@ -63,6 +119,25 @@ def _cmd_nucleosome_positioning(args):
 def _cmd_tf_annotate(args):
     from easyepi.tf_annotate import run_tf_annotate
     return run_tf_annotate(args)
+
+
+
+
+
+
+def _cmd_dmr(args):
+    from easyepi.dmr import run_dmr
+    return run_dmr(args)
+
+
+def _cmd_bam2bw(args):
+    from easyepi.bam2bw_cli import run_bam2bw
+    return run_bam2bw(args)
+
+
+def _cmd_init(args):
+    from easyepi.quickflow import run_init
+    return run_init(args)
 
 
 def _cmd_qc(args):
@@ -280,12 +355,69 @@ def _cmd_washu(args):
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the argparse tree for every analysis module."""
-    parser = argparse.ArgumentParser(
+    parser = EasyepiParser(
         prog="easyepi",
         description="Easyepi 鈥?unified bulk epigenomics downstream analysis suite.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    sub = parser.add_subparsers(dest="module", required=True)
+    sub = parser.add_subparsers(dest="module", required=True,
+                                parser_class=EasyepiParser)
+
+
+
+    # Guided entry points come first in --help: they are what a first-time
+    # user needs, and burying them under 25 subcommands is the main
+    # usability complaint.
+    # The chain starts here: peaks, QC and tracks all read what this writes.
+
+    p_b2 = sub.add_parser(
+        "bam2bw",
+        help="convert BAM(s) to BigWig coverage; the first step of any analysis")
+    p_b2.add_argument("bam", nargs="+",
+                      help="coordinate-sorted BAM file(s)")
+    p_b2.add_argument("-o", "--out", required=True,
+                      help="output directory for one track per sample")
+    p_b2.add_argument("--output-file", default=None, dest="output_file",
+                      help="explicit BigWig path; only valid with a single BAM")
+    p_b2.add_argument("--assay", default=None, choices=list(ASSAY_CHOICES_FOR_CLI),
+                      help="sets sensible defaults for shift/bin-size/normalize")
+    p_b2.add_argument("--shift", default=None, choices=["none", "tn5"],
+                      help="tn5 applies the +4/-5 cut-site shift (ATAC/CUT&Tag)")
+    p_b2.add_argument("--bin-size", type=int, default=None, dest="bin_size",
+                      help="bin width in bp")
+    p_b2.add_argument("--normalize", default=None,
+                      choices=["raw", "cpm", "rpkm"],
+                      help="value scaling; cpm/rpkm make samples comparable")
+    p_b2.add_argument("--chrom", default=None,
+                      help="restrict to one chromosome (default: all)")
+    p_b2.add_argument("--min-mapq", type=int, default=30, dest="min_mapq")
+    p_b2.add_argument("--max-depth", type=float, default=None, dest="max_depth",
+                      help="cap per-base depth before binning")
+    p_b2.add_argument("--name", action="append", default=None,
+                      metavar="BAM=NAME",
+                      help="override a sample name (default: BAM file stem)")
+    p_b2.add_argument("--jobs", "-j", type=int, default=None,
+                      help="worker processes for coverage accumulation; "
+                           "default: every core the scheduler allows, 1 = "
+                           "in-process")
+    p_b2.add_argument("--manifest", default=None,
+                      help="write a JSON manifest of the produced tracks")
+    p_b2.set_defaults(func=_cmd_bam2bw)
+
+
+
+    p_i = sub.add_parser(
+        "init",
+        help="write a project file from a folder, detecting samples and assays")
+    p_i.add_argument("source", help="folder holding BAM/BigWig/peak files")
+    p_i.add_argument("--out", required=True, help="project TOML to write")
+    p_i.add_argument("--project-id", default=None, dest="project_id")
+    p_i.add_argument("--genome-build", default=None, dest="genome_build",
+                     help="hg38 / hg19 / mm10 / mm39; inferred from paths if omitted")
+    p_i.add_argument("--annotation", default=None, help="GTF/GFF path to record")
+    p_i.add_argument("--motif-database", default=None, dest="motif_database",
+                     help="motif file to record (JASPAR/HOMER/MEME)")
+    p_i.set_defaults(func=_cmd_init)
 
     p_qc = sub.add_parser("qc", help="QC and statistical summary")
     p_qc.add_argument("--bam", action="append", default=None,
@@ -318,6 +450,41 @@ def build_parser() -> argparse.ArgumentParser:
     from easyepi._plots import add_figure_args
     add_figure_args(p_qc)
     p_qc.set_defaults(func=_cmd_qc)
+
+    p_dm = sub.add_parser(
+        "dmr",
+        help="differential methylation regions between two groups of "
+             "bisulfite BAMs (per-site Wald test, BH FDR, gap-merged regions)")
+    p_dm.add_argument("--group-a", action="append", required=True,
+                      dest="group_a", metavar="BAM[,BAM...]",
+                      help="repeatable or comma-separated bisulfite BAMs for group A")
+    p_dm.add_argument("--group-b", action="append", required=True,
+                      dest="group_b", metavar="BAM[,BAM...]",
+                      help="repeatable or comma-separated bisulfite BAMs for group B")
+    p_dm.add_argument("--label-a", default=None, dest="label_a",
+                      help="display name for group A (default A)")
+    p_dm.add_argument("--label-b", default=None, dest="label_b",
+                      help="display name for group B (default B)")
+    p_dm.add_argument("--context", default="CpG",
+                      help="methylation context to test: CpG, CHG or CHH")
+    p_dm.add_argument("--chrom", default=None,
+                      help="restrict to these chromosomes (comma-separated)")
+    p_dm.add_argument("--min-coverage", type=int, default=5,
+                      dest="min_coverage",
+                      help="minimum reads per group at a site (default 5)")
+    p_dm.add_argument("--min-mapq", type=int, default=10, dest="min_mapq")
+    p_dm.add_argument("--min-diff", type=float, default=0.0,
+                      dest="min_diff",
+                      help="minimum absolute methylation difference (0-1)")
+    p_dm.add_argument("--alpha", type=float, default=0.05,
+                      help="FDR threshold for significant sites and regions")
+    p_dm.add_argument("--max-gap", type=int, default=100, dest="max_gap",
+                      help="merge significant sites at most this many bp apart")
+    p_dm.add_argument("--min-sites", type=int, default=1, dest="min_sites",
+                      help="minimum significant sites per reported region")
+    p_dm.add_argument("--out", required=True,
+                      help="DMR table (a .sites.tsv and .json are written beside it)")
+    p_dm.set_defaults(func=_cmd_dmr)
 
     p_norm = sub.add_parser("normalize", help="signal / count normalization")
     p_norm.add_argument("--matrix", required=True, help="TSV: region ID then sample columns")
@@ -441,12 +608,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="multi-locus x multi-mark track panel: one column per gene, "
              "one row per BigWig, with the gene model underneath")
     p_gp.add_argument("--bigwig", action="append", required=True,
-                      metavar="NAME=PATH or NAME[,NAME...]",
-                      help="track label(s). Either NAME=PATH for each mark, or bare labels "
-                           "resolved with --bigwig-dir; comma-separated labels are accepted, "
-                           "e.g. --bigwig H3K4me3,H3K27ac")
-    p_gp.add_argument("--bigwig-dir", default=None, dest="bigwig_dir",
-                      help="folder holding <NAME>.bw / <NAME>.bigWig; lets --bigwig take bare labels instead of NAME=PATH")
+                      metavar="PATH[,PATH...] or NAME=PATH",
+                      help="BigWig path(s), absolute or relative. A single path "
+                           "is labelled from its filename stem; NAME=PATH "
+                           "overrides it. Comma lists accepted, e.g. a.bw,b.bw")
     p_gp.add_argument("--gtf", default=None,
                       help="GTF/GFF gene annotation used for gene bodies and exons")
     p_gp.add_argument("--bed", default=None,
@@ -557,17 +722,30 @@ def build_parser() -> argparse.ArgumentParser:
                        help="cap on reads inspected per metric (default: 200000)")
     p_qcr.set_defaults(func=_cmd_make_qc_report)
 
+    # The five assay QC commands were five names for one implementation, so they
+    # are registered as aliases of `qc --assay` and hidden from --help. Each one
+    # behaves exactly as before, including its exit code and output files; the
+    # only change is that `qc --assay atac` is now the documented spelling.
+    # The five assay QC commands were five names for one implementation, so they
+    # are kept as thin aliases of `qc --assay`. Each still parses the same flags
+    # and writes the same outputs; the documented spelling is `qc --assay`.
     for command, assay, help_text in (
-        ("atac-qc", "ATAC-seq", "ATAC-seq input and signal QC"),
-        ("chip-qc", "ChIP-seq", "ChIP-seq/CUT&Tag/CUT&RUN input QC"),
-        ("histone-qc", "histone", "histone-mark signal QC"),
-        ("methylation-qc", "methylation", "methylation table/coverage QC"),
-        ("mnase-qc", "MNase-seq", "MNase-seq input QC"),
+        ("atac-qc", "atac", "alias of `qc --assay atac`"),
+        ("chip-qc", "chip", "alias of `qc --assay chip`"),
+        ("histone-qc", "histone", "alias of `qc --assay histone`"),
+        ("methylation-qc", "methylation", "alias of `qc --assay methylation`"),
+        ("mnase-qc", "mnase", "alias of `qc --assay mnase`"),
     ):
         p_assay = sub.add_parser(command, help=help_text)
         _add_runtime_args(p_assay)
-        p_assay.add_argument("--max-reads", type=int, default=200000,
-                             help="cap on reads inspected for FRiP/fragment metrics (default: 200000)")
+        p_assay.add_argument(
+            "--max-reads", type=int, default=200000,
+            help="cap on reads inspected for FRiP/fragment metrics (default: 200000)")
+        # _add_runtime_args already defines --assay; the alias only fixes its
+        # default so the user cannot accidentally run atac-qc with chip thresholds.
+        for action in p_assay._actions:
+            if action.dest == "assay":
+                action.default = assay
         p_assay.set_defaults(func=_cmd_assay_qc, assay_name=assay)
 
     p_int = sub.add_parser("integrate", help="gene-centric multi-track integration for QCed BigWig, peak and RNA results")

@@ -292,22 +292,22 @@ def read_gene_models(path, genes: Sequence[str] | None = None,
     return records, {k: v for k, v in exons.items() if k in {r["name"] for r in records}}
 
 
-def parse_track_specs(items, search_dir=None,
-                      extensions=(".bw", ".bigWig", ".bigwig")):
+def parse_track_specs(items):
     """Resolve ``--bigwig`` entries into ``{"name", "bigwig"}`` records.
 
-    Two forms are accepted, because writing ``NAME=PATH`` for every mark is
-    repetitive:
+    ``--bigwig`` takes a path or ``NAME=PATH``; a directory flag was removed because
+    it made the common case (a path you already have) into two arguments, and it
+    could not express a path outside that one folder.
 
-    * ``NAME=PATH`` — explicit label and file.
-    * ``NAME`` or ``NAME,OTHER`` — comma-separated labels resolved against
-      ``search_dir``, so ``H3K4me3`` finds ``<dir>/H3K4me3.bw``.
+    * ``tracks/H3K4me3.bw`` -> name ``H3K4me3`` (stem), absolute or relative
+    * ``H3K4me3=tracks/H3K4me3.bw`` -> explicit label, useful when the filename is
+      not what the figure should say
 
-    Ambiguity and absence are errors: a label that matches nothing, or that matches
-    several files, must not silently become a missing or wrong track.
+    Relative paths are resolved against the current working directory, so a run from
+    a project root behaves as expected. Every path is checked here: a missing track
+    must fail before any figure work starts, not part-way through.
     """
-    out = []
-    base = Path(search_dir) if search_dir else None
+    out: list[dict] = []
     for raw in items or []:
         for piece in str(raw).split(","):
             entry = piece.strip()
@@ -316,47 +316,34 @@ def parse_track_specs(items, search_dir=None,
             if "=" in entry:
                 name, path = entry.split("=", 1)
                 name, path = name.strip(), path.strip()
-                if not name or not path:
-                    raise ValueError(f"malformed --bigwig entry {entry!r}")
-                if not Path(path).exists():
-                    raise FileNotFoundError(f"track '{name}' not found: {path}")
-                out.append({"name": name, "bigwig": str(path)})
-                continue
+            else:
+                path = entry
+                name = ""
+            if not path:
+                raise ValueError(f"malformed --bigwig entry {entry!r}: no path")
+            from easyepi.errors import require_file
 
-            name = entry
-            direct = Path(entry)
-            if direct.suffix in extensions and direct.exists():
-                out.append({"name": direct.stem, "bigwig": str(direct)})
-                continue
-            if base is None:
-                raise ValueError(
-                    f"--bigwig {entry!r} has no '=' and no --bigwig-dir was given; "
-                    "use NAME=PATH or pass --bigwig-dir with the folder holding "
-                    "the BigWigs")
-            found = [p for p in (base / f"{name}{ext}" for ext in extensions)
-                     if p.exists()]
-            if not found:
-                raise FileNotFoundError(
-                    f"--bigwig-dir {base} contains no {name}.bw / {name}.bigWig")
-            if len(found) > 1:
-                raise ValueError(
-                    f"--bigwig {name!r} is ambiguous in {base}: "
-                    + ", ".join(p.name for p in found))
-            out.append({"name": name, "bigwig": str(found[0])})
+            resolved = require_file(path, purpose="BigWig track",
+                                    suffixes=(".bw", ".bigWig", ".bigwig"))
+            if not name:
+                name = resolved.stem
+            out.append({"name": name, "bigwig": str(resolved)})
     if not out:
         raise ValueError("at least one --bigwig is required")
     names = [t["name"] for t in out]
     dupes = sorted({n for n in names if names.count(n) > 1})
     if dupes:
-        raise ValueError(f"duplicate track name(s): {', '.join(dupes)}")
+        raise ValueError(
+            f"duplicate track name(s): {', '.join(dupes)}; "
+            "label one explicitly with NAME=PATH")
     return out
 
 
 def expand_csv_values(items):
     """Split repeated and comma-separated values into one flat list.
 
-    ``--signal H3K4me3=a.bg,H3K27ac=b.bg`` should behave like two flags; this is
-    the single place that rule is expressed so every command agrees on it.
+    ``--signal H3K4me3=a.bg,H3K27ac=b.bg`` behaves like two flags; this is the one
+    place that rule is expressed so every command agrees on it.
     """
     out = []
     for raw in items or []:
@@ -365,7 +352,6 @@ def expand_csv_values(items):
             if value:
                 out.append(value)
     return out
-
 
 def parse_gene_names(items):
     """Flatten repeatable or comma-separated gene symbols into one ordered list.
@@ -392,8 +378,7 @@ def run_gene_panel(args) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 
-    specs = parse_track_specs(args.bigwig,
-                              search_dir=getattr(args, "bigwig_dir", None))
+    specs = parse_track_specs(args.bigwig)
     gene_names = parse_gene_names(getattr(args, "gene", None))
     if args.gtf:
         genes, exons = read_gene_models(args.gtf, genes=gene_names or None,

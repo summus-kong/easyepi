@@ -259,81 +259,59 @@ def test_parse_gene_names_preserves_user_order():
     assert parse_gene_names(["TP73,AGRN,SKI"]) == ["TP73", "AGRN", "SKI"]
 
 
-def test_parse_track_specs_explicit_form(tmp_path):
+def test_parse_track_specs_takes_a_plain_path(tmp_path):
+    """A single path is the common case and needs no label."""
     bw = tmp_path / "H3K4me3.bw"
     bw.write_bytes(b"x")
-    specs = parse_track_specs([f"H3K4me3={bw}"])
+    specs = parse_track_specs([str(bw)])
     assert specs == [{"name": "H3K4me3", "bigwig": str(bw)}]
 
 
-def test_parse_track_specs_resolves_bare_labels_against_a_directory(tmp_path):
-    for name in ("H3K4me3", "H3K27ac", "H3K4me1", "H3K27me3"):
-        (tmp_path / f"{name}.bw").write_bytes(b"x")
-    specs = parse_track_specs(["H3K4me3,H3K27ac,H3K4me1,H3K27me3"],
-                              search_dir=tmp_path)
-    assert [s["name"] for s in specs] == ["H3K4me3", "H3K27ac", "H3K4me1", "H3K27me3"]
-    assert all(s["bigwig"].endswith(".bw") for s in specs)
+def test_parse_track_specs_accepts_a_relative_path(tmp_path, monkeypatch):
+    """Relative paths resolve against the working directory."""
+    (tmp_path / "tracks").mkdir()
+    (tmp_path / "tracks" / "H3K27ac.bw").write_bytes(b"x")
+    monkeypatch.chdir(tmp_path)
+    specs = parse_track_specs(["tracks/H3K27ac.bw"])
+    assert specs[0]["name"] == "H3K27ac"
+    assert specs[0]["bigwig"] == "tracks/H3K27ac.bw"
 
 
-def test_parse_track_specs_accepts_bigwig_extension(tmp_path):
-    (tmp_path / "H3K4me3.bigWig").write_bytes(b"x")
-    specs = parse_track_specs(["H3K4me3"], search_dir=tmp_path)
-    assert specs[0]["bigwig"].endswith("H3K4me3.bigWig")
-
-
-def test_parse_track_specs_errors_on_missing_label(tmp_path):
-    with pytest.raises(FileNotFoundError, match="contains no"):
-        parse_track_specs(["NOPE"], search_dir=tmp_path)
-
-
-def test_parse_track_specs_errors_without_a_directory():
-    with pytest.raises(ValueError, match="--bigwig-dir"):
-        parse_track_specs(["H3K4me3"])
-
-
-def test_parse_track_specs_errors_on_missing_explicit_path(tmp_path):
-    with pytest.raises(FileNotFoundError, match="not found"):
-        parse_track_specs(["A=/definitely/not/here.bw"])
-
-
-def test_parse_track_specs_errors_on_ambiguous_extension(tmp_path):
-    (tmp_path / "X.bw").write_bytes(b"x")
-    (tmp_path / "X.bigWig").write_bytes(b"x")
-    with pytest.raises(ValueError, match="ambiguous"):
-        parse_track_specs(["X"], search_dir=tmp_path)
-
-
-def test_parse_track_specs_errors_on_duplicate_names(tmp_path):
-    bw = tmp_path / "a.bw"
+def test_parse_track_specs_explicit_label_overrides_the_stem(tmp_path):
+    bw = tmp_path / "ENCFF123ABC.bw"
     bw.write_bytes(b"x")
-    with pytest.raises(ValueError, match="duplicate"):
-        parse_track_specs([f"S={bw}", f"S={bw}"])
+    specs = parse_track_specs([f"H3K4me3={bw}"])
+    assert specs[0]["name"] == "H3K4me3"
+
+
+def test_parse_track_specs_accepts_comma_lists(tmp_path):
+    a = tmp_path / "a.bw"; a.write_bytes(b"x")
+    b = tmp_path / "b.bw"; b.write_bytes(b"x")
+    specs = parse_track_specs([f"{a},{b}"])
+    assert [s["name"] for s in specs] == ["a", "b"]
+
+
+def test_parse_track_specs_reports_a_missing_file(tmp_path):
+    with pytest.raises(FileNotFoundError, match="input not found"):
+        parse_track_specs([str(tmp_path / "absent.bw")])
+
+
+def test_parse_track_specs_rejects_a_duplicate_label(tmp_path):
+    a = tmp_path / "sub1" / "x.bw"; a.parent.mkdir(); a.write_bytes(b"x")
+    b = tmp_path / "sub2" / "x.bw"; b.parent.mkdir(); b.write_bytes(b"x")
+    with pytest.raises(ValueError, match="duplicate track name"):
+        parse_track_specs([str(a), str(b)])
+
+
+def test_parse_track_specs_requires_a_path():
+    with pytest.raises(ValueError, match="no path"):
+        parse_track_specs(["NAME="])
 
 
 def test_parse_track_specs_requires_at_least_one():
     with pytest.raises(ValueError, match="at least one"):
         parse_track_specs([])
 
-
-def test_parse_track_specs_mixes_both_forms(tmp_path):
-    (tmp_path / "H3K4me3.bw").write_bytes(b"x")
-    other = tmp_path / "custom.bw"
-    other.write_bytes(b"x")
-    specs = parse_track_specs(["H3K4me3", f"MYLABEL={other}"], search_dir=tmp_path)
-    assert [s["name"] for s in specs] == ["H3K4me3", "MYLABEL"]
-
-
-def test_cli_accepts_bigwig_dir_and_comma_gene():
-    from easyepi import cli
-    parser = cli.build_parser()
-    args = parser.parse_args([
-        "gene-panel", "--bigwig", "H3K4me3,H3K27ac",
-        "--bigwig-dir", "/data/bigwigs",
-        "--gene", "AGRN,TP73",
-        "--gtf", "g.gtf", "--out", "o"])
-    assert args.bigwig == ["H3K4me3,H3K27ac"]
-    assert args.bigwig_dir == "/data/bigwigs"
-    assert args.gene == ["AGRN,TP73"]
 
 # --------------------------------------------------------------------------
 # Shared comma-list expansion

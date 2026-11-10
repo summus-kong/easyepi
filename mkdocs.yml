@@ -1,0 +1,104 @@
+site_name: easyepi
+site_description: Bulk epigenomics downstream analysis in pure Python
+site_url: https://summus-kong.github.io/easyepi/
+repo_url: https://github.com/summus-kong/easyepi
+repo_name: summus-kong/easyepi
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+    - search.highlight
+    - search.suggest
+  palette:
+    - scheme: default
+      primary: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+  # API pages are generated from the docstrings rather than hand-written, so the
+  # reference cannot drift from the code. mkdocstrings renders the signatures,
+  # type hints and the "Limitation" notes that each module carries.
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Install: install.md
+      - Quick start: quickstart.md
+  - Tutorials:
+      - End-to-end examples: EXAMPLES.md
+  - Assays:
+      - ATAC-seq: assays/atac.md
+      - ChIP-seq: assays/chip.md
+      - CUT&Tag and CUT&RUN: assays/cuttag.md
+      - MNase-seq: assays/mnase.md
+      - Bisulfite / WGBS: assays/wgbs.md
+  - Commands:
+      - Overview: commands/index.md
+      - bam2bw: commands/bam2bw.md
+      - qc: commands/qc.md
+      - peaks: commands/peaks.md
+      - annotate: commands/annotate.md
+      - tf-annotate: commands/tf-annotate.md
+      - dmr: commands/dmr.md
+      - differential-peaks: commands/differential-peaks.md
+      - visualisation: commands/viz.md
+  - API reference:
+      - easyepi.bam2bigwig: api/bam2bigwig.md
+      - easyepi.coverage_parallel: api/coverage_parallel.md
+      - easyepi.methylation_bam: api/methylation_bam.md
+      - easyepi.dmr: api/dmr.md
+      - easyepi.tf_annotate: api/tf_annotate.md
+      - easyepi.histone_states: api/histone_states.md
+      - easyepi.nucleosome_positioning: api/nucleosome_positioning.md
+      - easyepi.viz.genomeviews: api/genomeviews.md
+      - easyepi.viz.panels: api/panels.md
+      - easyepi.errors: api/errors.md
+  - Reference:
+      - Usage and input contracts: USAGE.md
+      - QC thresholds: QC.md
+      - Motif methods: MOTIF_BACKENDS.md
+      - Method references: REFERENCES.md
+      - Verification results: VERIFICATION.md
+      - Reliability and limitations: RELIABILITY.md
+      - Scope and evidence: INNOVATION.md
+
+extra:
+  version:
+    provider: mike
+
+watch:
+  - ../easyepi
