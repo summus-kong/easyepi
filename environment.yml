@@ -1,0 +1,31 @@
+name: easyepi
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - pip
+  - numpy=2.2.6
+  - scipy=1.15.3
+  - pandas=2.2.3
+  - matplotlib=3.10
+  - pysam=0.23
+  - pybigwig=0.3.24
+  - biopython=1.85
+  - scikit-learn=1.6
+  - numba=0.61.2
+  - llvmlite=0.44
+  - pytest>=8
+  # ---------------------------------------------------------------------------
+  # pip-only dependencies (no usable conda build for the required pin):
+  #   decoupler - conda-forge ships decoupler-py 2.x only, while
+  #               easyepi/activity.py pins the verified 1.9 API.
+  #   MACS3     - bioconda has no solvable py3.11 build (py311 builds conflict
+  #               with hmmlearn; newer builds are py3.12/3.13 only), so the
+  #               peak-calling backend is installed from source via pip.
+  #   anndata   - transitive requirement of decoupler 1.9.2.
+  # ---------------------------------------------------------------------------
+  - pip:
+      - decoupler==1.9.2
+      - anndata
+      - MACS3

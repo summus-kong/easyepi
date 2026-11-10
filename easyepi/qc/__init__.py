@@ -1,0 +1,86 @@
+"""QC summary entry point shared by the generic ``easyepi qc`` command.
+
+When ``--assay`` is supplied this produces the *same* metric payload and
+``qc_verdict`` block as the assay-specific commands (``atac-qc``, ``chip-qc`` …),
+because both call :func:`easyepi.qc_payload.build_sample_payload`. Without
+``--assay`` it stays the original lightweight BAM summary.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+
+def bam_qc_summary(bam_path) -> dict:
+    """Return measured BAM QC; missing readers raise an explicit dependency error."""
+    from ..core.io import bam_qc
+
+    q = bam_qc(bam_path)
+    summary = {"file": str(bam_path), **q, "mapping_rate": round(q.get("mapping_rate", 0.0), 4)}
+    # Preserve provenance so a filtered BAM's trivially-1.0 ratio is never
+    # presented as an alignment success rate.
+    summary["mapping_rate_source"] = q.get("mapping_rate_source")
+    return summary
+
+
+def run_qc(args) -> int:
+    """Generic QC entry point; assay-aware when ``--assay`` is given."""
+    from ..qc_payload import build_sample_payload
+    from ..qc_thresholds import load_rules, summarize_verdicts
+
+    from ..qc_inputs import resolve_inputs
+
+    # Resolve by sample name, not list position: positional pairing
+    # mismatched tracks as soon as one sample lacked a BigWig or the flags
+    # were written in a different order.
+    inputs = resolve_inputs(args)
+    assay = getattr(args, "assay", None)
+    rules = load_rules(getattr(args, "qc_thresholds", None))
+
+    result: dict[str, object] = {"samples": {}}
+    if assay:
+        result["assay"] = assay
+    rows: list[dict] = []
+
+    for sample_id, tracks in inputs.items():
+        bam = tracks.get("bam")
+        bigwig = tracks.get("bigwig")
+        peak = tracks.get("peak")
+        summary = bam_qc_summary(bam) if bam else {}
+        metrics: dict[str, object] = {"sample_id": sample_id, "bam": summary}
+
+        if assay:
+            metrics["assay"] = assay
+            built = build_sample_payload(
+                assay,
+                bam=bam,
+                bigwig=bigwig,
+                peak=peak,
+                annotation=getattr(args, "annotation", None),
+                blacklist=getattr(args, "blacklist", None),
+                bam_qc=summary,
+                max_reads=getattr(args, "max_reads", 200000),
+                rules=rules,
+            )
+            metrics["assay_qc"] = built["assay_qc"]
+            metrics["qc_verdict"] = built["qc_verdict"]
+            rows.append({"sample_id": sample_id, "qc_verdict": built["qc_verdict"]})
+
+        result["samples"][sample_id] = metrics
+
+    if assay:
+        result["verdict_summary"] = summarize_verdicts(rows)
+
+    # A report with no samples is a silent failure: it looks successful but
+    # describes nothing. Fail instead of writing an empty file.
+    if not result["samples"]:
+        raise ValueError(
+            "no samples were resolved; check --bam/--bigwig/--peak or "
+            "--input-dir (no BAM, BigWig or peak file was recognised)")
+
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"[easyepi] QC summary written to {out}")
+    return 0

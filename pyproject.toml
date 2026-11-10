@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "easyepi"
+version = "0.1.0"
+description = "Easyepi: a unified bulk epigenomics downstream analysis suite (CUT&Tag / CUT&RUN / ChIP-seq / ATAC-seq / MNase-seq)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+authors = [{ name = "houwb" }]
+keywords = ["epigenomics", "CUT&Tag", "ChIP-seq", "ATAC-seq", "MNase", "peak", "nucleosome"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+# Core runtime dependencies
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "pandas>=2.0",
+    "matplotlib>=3.7",
+]
+
+[project.optional-dependencies]
+bam = ["pysam>=0.22"]
+bigwig = ["pyBigWig>=0.3.22"]
+activity = ["decoupler>=1.9.2,<2"]
+motif = ["biopython>=1.81"]
+dev = ["pytest>=8", "build>=1.2"]
+# Multi-track clustering uses scikit-learn only; statsmodels is not imported
+# anywhere in the package and is intentionally not listed.
+stats = ["scikit-learn>=1.3"]
+all = [
+    "pysam>=0.22",
+    "pyBigWig>=0.3.22",
+    "decoupler>=1.9.2,<2",
+    "anndata",
+    "biopython>=1.81",
+    "scikit-learn>=1.3",
+]
+
+[project.scripts]
+easyepi = "easyepi.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/houwb/easyepi"
+Repository = "https://github.com/houwb/easyepi"
+Documentation = "https://github.com/houwb/easyepi/tree/main/docs"
+Issues = "https://github.com/houwb/easyepi/issues"
+
+[tool.setuptools.packages.find]
+include = ["easyepi*"]
+exclude = ["easyepi.python*", "easyepi.backends*", "easyepi.scripts*"]
+namespaces = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools]
+include-package-data = false

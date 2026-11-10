@@ -1,0 +1,19 @@
+# Python build and bytecode
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Test and local analysis artefacts
+.pytest*/
+pytest_*/
+smoke_*/
+tests/_*_tmp/
+tests/fig_check/
+
+# Local package builds
+.*wheel*/
+
+.verification/
+.chromhmm_manual.pdf

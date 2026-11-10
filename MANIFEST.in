@@ -1,0 +1,19 @@
+include README.md LICENSE CITATION.cff CHANGELOG.md pyproject.toml environment.yml
+recursive-include docs *.md
+recursive-include examples *.py *.toml
+recursive-include tests test_*.py
+recursive-include maintenance *.py *.ps1
+include .github/workflows/linux.yml
+prune build
+prune .verification
+prune easyepi/python
+prune easyepi/backends
+prune easyepi/scripts
+prune easyepi/.vscode
+prune tests/_cli_tmp
+prune tests/_cooc_tmp
+prune tests/_pipe_tmp
+prune tests/_pub_tmp
+prune tests/_rep_tmp
+prune tests/fig_check
+global-exclude *.pyc *.pyo *.R *.r *.Rmd
