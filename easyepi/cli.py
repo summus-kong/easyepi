@@ -503,27 +503,29 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_pk = sub.add_parser(
         "peaks",
-        help="call peaks from a BAM or a BigWig; MACS3 when available, the "
-             "built-in Poisson caller otherwise")
-    p_pk.add_argument("--bam", action="append", default=None,
-                      help="BAM input(s); repeatable or comma-separated")
-    p_pk.add_argument("--bigwig", action="append", default=None,
-                      help="BigWig input(s); repeatable or comma-separated")
+        help="call peaks with MACS3 (imported as a library)")
+    p_pk.add_argument("bam", nargs="+", help="treatment BAM(s), coordinate-sorted")
+    p_pk.add_argument("-c", "--control", action="append", default=None,
+                      help="control BAM(s); repeatable or comma-separated")
+    p_pk.add_argument("-o", "--out", required=True, help="output directory")
     p_pk.add_argument("--assay", default=None, choices=list(ASSAY_CHOICES_FOR_CLI),
-                      help="selects calling defaults (shift, broad output)")
+                      help="sets format and broad/narrow defaults")
+    p_pk.add_argument("--format", default=None,
+                      help="MACS3 format: BAM, BAMPE, BED, BEDPE (default from --assay)")
+    p_pk.add_argument("--genome", default="hs",
+                      help="MACS3 genome size: hs, mm, dm or a number (default hs)")
+    p_pk.add_argument("--qvalue", type=float, default=0.01,
+                      help="q-value cutoff (default 0.01)")
+    p_pk.add_argument("--extsize", type=int, default=None)
+    p_pk.add_argument("--shift-size", type=int, default=None, dest="shift_size")
     p_pk.add_argument("--broad", action="store_true", default=None,
-                      help="write a broadPeak file (default comes from --assay)")
-    p_pk.add_argument("--backend", default="auto",
-                      choices=["auto", "macs3", "native"],
-                      help="caller to use; auto prefers MACS3 when installed")
-    p_pk.add_argument("--chrom", default=None,
-                      help="restrict to these chromosomes (comma-separated)")
-    p_pk.add_argument("--bin-size", type=int, default=200, dest="bin_size")
-    p_pk.add_argument("--threshold", type=float, default=5.0,
-                      help="fold-change threshold for the built-in caller")
-    p_pk.add_argument("--max-qvalue", type=float, default=0.01, dest="max_qvalue")
-    p_pk.add_argument("--out", required=True)
-    add_figure_args(p_pk)
+                      help="broad peaks (default from --assay)")
+    p_pk.add_argument("--macs-arg", action="append", default=None,
+                      dest="macs_arg", metavar="'--opt VALUE'",
+                      help="extra MACS3 options passed through verbatim, e.g. "
+                           "--macs-arg=\"--nomodel --extsize 200\"; repeatable")
+    p_pk.add_argument("--keep-dup-all", action="store_true", dest="keep_dup_all",
+                      help="keep all duplicate reads (MACS3 default is auto)")
     p_pk.set_defaults(func=_cmd_peaks_v2)
 
     p_an = sub.add_parser("annotate", help="peak annotation and enrichment")

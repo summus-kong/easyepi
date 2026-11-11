@@ -1,50 +1,48 @@
-"""`easyepi peaks` -- peak calling from a BAM or a BigWig.
+"""Peak calling through MACS3, invoked as a library rather than a subprocess.
 
-The subcommand used to raise unconditionally:
+Why import instead of shelling out
+----------------------------------
+MACS3 ships ``MACS3.Commands.callpeak_cmd.run(args)``, which takes an argparse
+``Namespace`` and runs the whole pipeline in-process. Importing it:
 
-    raise ValueError("Use python -m easyepi.specific.atac.peaks or
-    easyepi.specific.chip.narrow_peaks with MACS3; the legacy stub has been disabled")
+* removes the requirement that a ``macs3`` executable be on ``PATH`` (a library
+  install is enough, and conda/pip layouts differ in where the binary lands);
+* lets the caller see the return value and exceptions instead of parsing stderr;
+* keeps one process, so a cluster job does not spend its accounting on a wrapper.
 
-while being the third entry in ``--help``, so the most visible command in the suite
-failed every time and pointed at a different set of module paths. The README and the
-per-command pages also advertised ``--bigwig``, ``--assay`` and ``--broad``, none of
-which the parser accepted.
+The previous version of ``easyepi peaks`` had two backends: this and a hand-written
+Poisson caller. The Poisson caller is being retired for the reason the concordance
+run in ``scripts/verify_peak_concordance.py`` demonstrated: with a global null it
+found only 37% of MACS3's peaks and its own peaks were 1000 bp wide against MACS3's
+191 bp. Keeping a second, worse caller behind a flag invites a user to pick it.
 
-This module supplies what those docs promised, on top of the functions that exist:
-
-    call_peaks_from_bam(bam_path, chrom, bin_size=200, scale=1.0,
-                        threshold=5.0, max_qvalue=0.01, t5_shift=True) -> PeakSet
-    poisson_peaks(signal, chrom, start, bin_size, ...) -> PeakSet
-    peaks_to_bed(peaks, out_path, format="narrowPeak")
-    bigwig_to_signal(path, chrom, start, end, bin_size=50) -> np.ndarray
-
-The caller is per-chromosome and has no broad/narrow switch, so ``--broad`` selects
-the output BED format and the manifest field, not the statistical test. That is
-stated in the printed summary rather than implied.
+Backend policy
+--------------
+MACS3 is the only backend. If it is not importable the command fails with the exact
+install line, rather than silently falling back to something less accurate.
 """
 
 from __future__ import annotations
 
 import json
-import shutil
+from argparse import Namespace
 from pathlib import Path
 from typing import Any, Sequence
 
-#: Per-assay calling defaults, kept explicit so a ChIP run cannot inherit ATAC's Tn5
-#: assumption.
-ASSAY_PEAK_DEFAULTS: dict[str, dict[str, Any]] = {
-    "atac": {"shift": "tn5", "genome": "hs", "broad": False},
-    "cuttag": {"shift": "tn5", "genome": "hs", "broad": False},
-    "cutrun": {"shift": "tn5", "genome": "hs", "broad": False},
-    "chip": {"shift": "none", "genome": "hs", "broad": False},
-    "histone": {"shift": "none", "genome": "hs", "broad": True},
-    "mnase": {"shift": "none", "genome": "hs", "broad": False},
+#: Per-assay MACS3 options. Stated explicitly so an ATAC run cannot inherit ChIP
+#: assumptions; ``BAMPE`` is required for paired-end ATAC and CUT&Tag.
+ASSAY_MACS_OPTIONS: dict[str, dict[str, Any]] = {
+    "atac": {"format": "BAMPE", "broad": False, "shift": 0, "extsize": None},
+    "cuttag": {"format": "BAMPE", "broad": False, "shift": 0, "extsize": None},
+    "cutrun": {"format": "BAMPE", "broad": False, "shift": 0, "extsize": None},
+    "chip": {"format": "BAM", "broad": False, "shift": 0, "extsize": None},
+    "histone": {"format": "BAM", "broad": True, "shift": 0, "extsize": None},
+    "mnase": {"format": "BAM", "broad": False, "shift": 0, "extsize": None},
 }
 
-ASSAY_CHOICES = tuple(ASSAY_PEAK_DEFAULTS)
+ASSAY_CHOICES = tuple(ASSAY_MACS_OPTIONS)
 
 _BAM_EXTS = (".bam",)
-_BW_EXTS = (".bw", ".bigWig", ".bigwig")
 
 
 def expand_paths(values: Sequence[str] | None) -> list[str]:
@@ -58,236 +56,127 @@ def expand_paths(values: Sequence[str] | None) -> list[str]:
     return out
 
 
-def resolve_inputs(args) -> tuple[list[tuple[str, Path]], list[str]]:
-    """Return ``[(kind, path)]`` plus notes, rejecting missing paths early."""
-    from easyepi.errors import UsageError, require_file
+def macs3_available() -> bool:
+    """Whether MACS3 can be imported in this interpreter."""
+    import importlib.util
 
-    notes: list[str] = []
-    items: list[tuple[str, Path]] = []
-
-    for path in expand_paths(getattr(args, "bam", None)):
-        items.append(("bam", require_file(path, purpose="peak calling input",
-                                          suffixes=_BAM_EXTS)))
-    for path in expand_paths(getattr(args, "bigwig", None)):
-        items.append(("bigwig", require_file(path, purpose="peak calling input",
-                                             suffixes=_BW_EXTS)))
-
-    if not items:
-        raise UsageError(
-            "no input: pass --bam or --bigwig",
-            example="easyepi peaks track.bw -o peaks/ --assay atac")
-
-    seen: set[str] = set()
-    unique: list[tuple[str, Path]] = []
-    for kind, path in items:
-        key = str(path)
-        if key in seen:
-            notes.append(f"duplicate input ignored: {path.name}")
-            continue
-        seen.add(key)
-        unique.append((kind, path))
-    return unique, notes
+    return importlib.util.find_spec("MACS3") is not None
 
 
-def caller_available() -> str | None:
-    for name in ("macs3", "macs2"):
-        found = shutil.which(name)
-        if found:
-            return found
-    return None
+def require_macs3():
+    """Import the MACS3 entry point or raise with the interpreter-specific hint."""
+    from easyepi.errors import missing_dependency, require_dependency
 
-
-def chromosome_names(kind: str, path: Path) -> list[str]:
-    if kind == "bam":
-        import pysam
-
-        with pysam.AlignmentFile(str(path), "rb") as bam:
-            return list(bam.references)
-    import pyBigWig
-
-    bw = pyBigWig.open(str(path))
     try:
-        return list(bw.chroms())
-    finally:
-        bw.close()
-
-
-def chromosome_length(kind: str, path: Path, chrom: str) -> int:
-    if kind == "bam":
-        import pysam
-
-        with pysam.AlignmentFile(str(path), "rb") as bam:
-            return int(bam.get_reference_length(chrom))
-    import pyBigWig
-
-    bw = pyBigWig.open(str(path))
-    try:
-        return int(bw.chroms()[chrom])
-    finally:
-        bw.close()
-
-
-def call_native(kind: str, path: Path, target: Path, *, assay_defaults: dict,
-                chroms: list[str] | None, bin_size: int, threshold: float,
-                max_qvalue: float, broad: bool) -> tuple[int, list[str]]:
-    """Run the built-in caller over the requested chromosomes, one BED out.
-
-    Per-chromosome results are written with the shipped ``peaks_to_bed``; the first
-    chromosome creates the file and the rest are appended by writing to a temporary
-    path and concatenating, because ``peaks_to_bed`` takes a path rather than a
-    handle.
-    """
-    from easyepi.peaks import (bigwig_to_signal, call_peaks_from_bam,
-                              peaks_to_bed, poisson_peaks)
-
-    notes: list[str] = []
-    available = chromosome_names(kind, path)
-    requested = list(chroms or available)
-    missing = [c for c in requested if c not in available]
-    if missing:
-        notes.append(f"absent from {path.name}, skipped: {', '.join(missing)}")
-    targets = [c for c in requested if c in available]
-    if not targets:
-        raise ValueError(f"{path.name} contains none of the requested chromosomes")
-
-    use_t5 = assay_defaults.get("shift") == "tn5"
-    if kind != "bam" and use_t5:
-        notes.append("BigWig input carries no read ends, so the Tn5 shift is not applied")
-
-    fmt = "broadPeak" if broad else "narrowPeak"
-    total = 0
-    parts: list[Path] = []
-    for chrom in targets:
-        if kind == "bam":
-            peak_set = call_peaks_from_bam(str(path), chrom, bin_size=bin_size,
-                                           threshold=threshold,
-                                           max_qvalue=max_qvalue, t5_shift=use_t5)
-        else:
-            length = chromosome_length(kind, path, chrom)
-            signal = bigwig_to_signal(path, chrom, 0, length, bin_size=bin_size)
-            peak_set = poisson_peaks(signal, chrom, 0, bin_size,
-                                     threshold=threshold, max_qvalue=max_qvalue)
-        total += int(getattr(peak_set, "n_peaks", 0))
-        part = target.with_name(f".{target.name}.{chrom}.part")
-        peaks_to_bed(peak_set, part, format=fmt)
-        parts.append(part)
-
-    with target.open("w", encoding="utf-8") as out:
-        for part in parts:
-            out.write(part.read_text(encoding="utf-8"))
-            part.unlink()
-    return total, notes
+        from MACS3.Commands import callpeak_cmd
+        return callpeak_cmd
+    except ImportError as exc:
+        raise missing_dependency(
+            "MACS3", "peak calling in `easyepi peaks`") from exc
 
 
 def run_peaks_command(args) -> int:
-    """CLI driver for ``easyepi peaks``."""
+    """CLI driver for ``easyepi peaks``: MACS3 only, one output per input BAM."""
+    from easyepi.errors import UsageError, require_file
+
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    items, notes = resolve_inputs(args)
-    assay = (getattr(args, "assay", None) or "").strip().lower()
-    if assay and assay not in ASSAY_PEAK_DEFAULTS:
-        from easyepi.errors import UsageError
+    bams = [require_file(p, purpose="peak calling input", suffixes=_BAM_EXTS)
+            for p in expand_paths(getattr(args, "bam", None))]
+    if not bams:
+        raise UsageError(
+            "no input: peak calling needs a BAM",
+            example="easyepi peaks sample.bam -o peaks/ --assay atac")
 
+    assay = (getattr(args, "assay", None) or "").strip().lower()
+    if assay and assay not in ASSAY_MACS_OPTIONS:
         raise UsageError(
             f"unknown assay {assay!r}; choose one of {', '.join(ASSAY_CHOICES)}",
-            example="easyepi peaks track.bw -o peaks/ --assay atac")
-    defaults = ASSAY_PEAK_DEFAULTS.get(assay, {"shift": "none", "genome": "hs",
-                                               "broad": False})
+            example="easyepi peaks sample.bam -o peaks/ --assay atac")
+    opts = ASSAY_MACS_OPTIONS.get(assay, {"format": "BAM", "broad": False,
+                                          "shift": 0, "extsize": None})
 
     broad_arg = getattr(args, "broad", None)
-    broad = bool(broad_arg) if broad_arg is not None else bool(defaults["broad"])
+    broad = bool(broad_arg) if broad_arg is not None else bool(opts["broad"])
+    fmt = (getattr(args, "format", None) or opts["format"]).upper()
+    genome = getattr(args, "genome", None) or "hs"
+    qvalue = float(getattr(args, "qvalue", None) or 0.01)
+    extsize = getattr(args, "extsize", None) or opts["extsize"]
+    shift = getattr(args, "shift_size", None)
+    shift = int(shift) if shift is not None else int(opts["shift"])
+    keep_dup = "auto" if not getattr(args, "keep_dup_all", False) else "all"
+    extra = getattr(args, "macs_arg", None)
+    if extra:
+        print(f"  passthrough: {extra}")
 
-    backend = (getattr(args, "backend", None) or "auto").lower()
-    macs = caller_available()
-    if backend == "auto":
-        backend = "macs3" if macs else "native"
-    if backend == "macs3" and not macs:
-        from easyepi.errors import UsageError
+    controls = [str(require_file(p, purpose="control BAM", suffixes=_BAM_EXTS))
+                for p in expand_paths(getattr(args, "control", None))]
 
-        raise UsageError(
-            "--backend macs3 was requested but neither macs3 nor macs2 is on PATH",
-            example="easyepi peaks track.bw -o peaks/ --backend native")
+    print(f"[easyepi] peaks (MACS3): {len(bams)} treatment BAM(s)")
+    print(f"  assay  : {assay or 'not stated'} -> format={fmt}, "
+          f"{'broad' if broad else 'narrow'}")
+    print(f"  genome : {genome}   q<={qvalue}")
+    if controls:
+        print(f"  control: {len(controls)} file(s)")
 
-    chroms = None
-    if getattr(args, "chrom", None):
-        chroms = [c.strip() for c in str(args.chrom).split(",") if c.strip()]
+    from easyepi.macs_options import build_namespace as build_macs_namespace
 
-    bin_size = int(getattr(args, "bin_size", None) or 200)
-    threshold = float(getattr(args, "threshold", None) or 5.0)
-    max_qvalue = float(getattr(args, "max_qvalue", None) or 0.01)
-
-    print(f"[easyepi] peaks: {len(items)} input(s)")
-    print(f"  assay    : {assay or 'not stated'}")
-    print(f"  output    : {'broadPeak' if broad else 'narrowPeak'}"
-          + (" (from the assay default)" if broad_arg is None and broad else ""))
-    print(f"  backend   : {backend}"
-          + (f" ({macs})" if macs and backend == "macs3" else ""))
-    if backend == "native":
-        print(f"  parameters: bin={bin_size} threshold={threshold} q<={max_qvalue}")
-    for note in notes:
-        print(f"  note: {note}")
+    callpeak_cmd = require_macs3()
 
     written: list[dict[str, Any]] = []
     failures: list[str] = []
-    for kind, path in items:
-        stem = path.name
-        for ext in _BAM_EXTS + _BW_EXTS:
-            if stem.endswith(ext):
-                stem = stem[: -len(ext)]
-                break
-        target = out_dir / f"{stem}.{'broadPeak' if broad else 'narrowPeak'}"
+    for bam in bams:
+        stem = bam.name[: -len(".bam")] if bam.name.endswith(".bam") else bam.stem
         try:
-            if backend == "macs3" and kind == "bam" and macs:
-                import logging
-                from types import SimpleNamespace
-
-                from easyepi._peak_calling import macs3_command
-                from easyepi.logging_utils import run_external
-
-                sample = SimpleNamespace(sample_id=stem, bam=str(path), bigwig=None)
-                command = macs3_command(
-                    macs, sample, out_dir, genome_size=defaults["genome"],
-                    assay="ATAC" if assay in ("atac", "cuttag", "cutrun") else "CHIP",
-                    broad=broad)
-                run_external(command, logging.getLogger("easyepi.peaks"))
-                produced = sorted(out_dir.glob(f"{stem}_peaks.*Peak"))
-                if produced:
-                    produced[0].rename(target)
-                n = sum(1 for _ in target.open()) if target.exists() else 0
-            else:
-                if backend == "macs3" and kind != "bam":
-                    print("  note: MACS3 needs a BAM; using the native caller")
-                n, extra = call_native(kind, path, target, assay_defaults=defaults,
-                                       chroms=chroms, bin_size=bin_size,
-                                       threshold=threshold, max_qvalue=max_qvalue,
-                                       broad=broad)
-                for note in extra:
-                    print(f"  note: {note}")
-        except Exception as exc:                       # noqa: BLE001
-            failures.append(f"{path.name}: {type(exc).__name__}: {exc}")
-            print(f"  [FAIL] {path.name}: {exc}")
-            if getattr(args, "verbose", False):
-                import traceback
-
-                traceback.print_exc()
+            # MACS3 writes <name>_peaks.<type>Peak into outdir; a per-sample
+            # subdirectory keeps two runs with the same stem from colliding.
+            sample_dir = out_dir / stem
+            sample_dir.mkdir(parents=True, exist_ok=True)
+            # The Namespace comes from MACS3's own argparse definition, read out of
+            # its console script. A hand-written Namespace missed attributes that
+            # opt_validate_callpeak compares to numbers, which surfaces as a
+            # TypeError deep inside MACS3 instead of an argument error.
+            options, provenance = build_macs_namespace(
+                treatment=[str(bam)], out_dir=sample_dir, name=stem,
+                genome=genome, fmt=fmt, broad=broad, control=controls,
+                qvalue=qvalue, extsize=extsize, shift=shift, keep_dup=keep_dup,
+                extra_args=getattr(args, "macs_arg", None))
+            callpeak_cmd.run(options)
+        except SystemExit as exc:                     # MACS3 calls sys.exit on error
+            failures.append(f"{bam.name}: MACS3 aborted (exit {exc.code})")
+            print(f"  [FAIL] {bam.name}: MACS3 aborted with exit code {exc.code}; "
+                  "see the MACS3 log above")
             continue
-        written.append({"input": str(path), "kind": kind, "peaks": str(target),
-                        "n_peaks": n})
-        print(f"  [OK]   {path.name} -> {target.name} ({n} peaks)")
+        except Exception as exc:                      # noqa: BLE001
+            failures.append(f"{bam.name}: {type(exc).__name__}: {exc}")
+            print(f"  [FAIL] {bam.name}: {exc}")
+            continue
+
+        produced = sorted(sample_dir.glob(f"{stem}_peaks.*Peak"))
+        if not produced:
+            failures.append(f"{bam.name}: MACS3 produced no peak file")
+            print(f"  [FAIL] {bam.name}: no peak file in {sample_dir}")
+            continue
+        target = produced[0]
+        n = sum(1 for _ in target.open(encoding="utf-8", errors="replace"))
+        written.append({"input": str(bam), "peaks": str(target), "n_peaks": n,
+                        "format": fmt, "broad": broad,
+                        "options_from": provenance["namespace_from"],
+                        "macs_argv": provenance["argv"],
+                        "macs_passthrough": provenance["passthrough"]})
+        print(f"  [OK]   {bam.name} -> {target.relative_to(out_dir)} ({n} peaks)")
 
     manifest = out_dir / "peaks_manifest.json"
     manifest.write_text(json.dumps({
-        "assay": assay or None, "format": "broadPeak" if broad else "narrowPeak",
-        "backend": backend, "shift": defaults["shift"], "chroms": chroms,
-        "bin_size": bin_size, "threshold": threshold, "max_qvalue": max_qvalue,
+        "caller": "MACS3 (imported as a library)",
+        "assay": assay or None, "format": fmt, "genome": genome,
+        "broad": broad, "qvalue": qvalue, "extsize": extsize, "shift": shift,
         "outputs": written, "failures": failures,
-        "note": "the built-in caller scores significance per bin; --broad selects the "
-                "BED format, not a different test",
     }, indent=2), encoding="utf-8")
 
     if failures:
-        print(f"[easyepi] {len(failures)} input(s) failed")
+        print(f"[easyepi] {len(failures)} BAM(s) failed")
         return 1
     if written:
         print(f"[easyepi] next: easyepi annotate {written[0]['peaks']} "
