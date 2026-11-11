@@ -56,6 +56,11 @@ def test_real_bigwig_integrals_and_missing_contig(tmp_path):
 
 
 def test_real_decoupler_ulm_returns_measured_activity():
+    # `easyepi[activity]` is installable on Python 3.11 only: the adapter calls
+    # `dc.run_ulm` and rejects decoupler outside 1.9.x, and 1.9.2 declares
+    # `Requires-Python <3.12`. The skip is therefore a property of the
+    # interpreter, not a missing dependency in the test environment, and CI
+    # allows exactly this one on 3.12.
     pytest.importorskip("decoupler")
     from easyepi.activity import estimate_tf_activity
     matrix=pd.DataFrame(np.random.default_rng(5).normal(size=(30,4)),

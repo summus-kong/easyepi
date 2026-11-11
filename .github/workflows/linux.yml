@@ -26,11 +26,18 @@ concurrency:
   group: linux-${{ github.ref }}
   cancel-in-progress: true
 
-# Every optional extra the package declares. Listed once here because it is used by
-# both jobs: with a partial set, tests that need the missing extra are skipped
-# instead of run, and a green suite then says less than it appears to.
+# Every optional extra the package declares, except `activity` on 3.12.
+#
+# `easyepi/activity.py` calls `dc.run_ulm` and rejects decoupler outside 1.9.x, and
+# decoupler 1.9.2 declares `Requires-Python <3.12`. So the extra is installable on
+# 3.11 only, which is what pyproject states with an environment marker. Listing it on
+# 3.12 would make `pip install` fail before any test runs; listing it everywhere with
+# a `<2` bound (the previous state) made it fail on both.
+#
+# A test that needs a missing extra is skipped, and the skip check below allows
+# exactly the ones this list cannot provide.
 env:
-  EXTRAS: "bam,viz,states,activity,motif,dev"
+  EXTRAS_COMMON: "bam,viz,states,motif,dev"
 
 jobs:
   test:
@@ -51,13 +58,29 @@ jobs:
           python-version: ${{ matrix.python }}
           cache: pip
 
+      - name: Resolve the extras for this interpreter
+        id: extras
+        run: |
+          # decoupler 1.9.x pins `Requires-Python <3.12`, so `activity` is only
+          # installable where easyepi/activity.py can actually use it.
+          if python -c "import sys; sys.exit(0 if sys.version_info < (3,12) else 1)"; then
+            EXTRAS="bam,viz,states,activity,motif,dev"
+            EXPECT_SKIPS=0
+          else
+            EXTRAS="bam,viz,states,motif,dev"
+            EXPECT_SKIPS=1
+          fi
+          echo "extras=${EXTRAS}" >> "$GITHUB_OUTPUT"
+          echo "expect_skips=${EXPECT_SKIPS}" >> "$GITHUB_OUTPUT"
+          echo "installing easyepi[${EXTRAS}]; expected skips: ${EXPECT_SKIPS}"
+
       - name: Install package with every optional extra
         run: |
           python -m pip install --upgrade pip
-          # `motif` (biopython) and `activity` (decoupler) are included on purpose.
-          # Without them, test_optional_readers.py and test_release_contract.py skip
-          # rather than fail, and the skip count made a real gap look like a pass.
-          python -m pip install -e ".[${EXTRAS}]"
+          # `motif` (biopython) is included on purpose: without it
+          # test_release_contract.py skips rather than fails, and a skip made a real
+          # gap look like a pass.
+          python -m pip install -e ".[${{ steps.extras.outputs.extras }}]"
 
       - name: Report what was actually installed
         # A green run against a different dependency set is not reproducible, so the
@@ -77,20 +100,20 @@ jobs:
           MPLBACKEND: Agg
         run: python maintenance/verify_linux.py
 
-      - name: No test may be silently skipped
-        # Every extra is installed above, so nothing should skip. This was a warning
-        # while the environment was incomplete; now that it is complete, a skip
-        # means a test guarded on an import that is missing from EXTRAS, which is a
-        # gap in the check rather than a fact about the code. Fail instead.
+      - name: Only the documented skips may occur
+        # A skip means a test guarded on an import that is not installed. That is
+        # acceptable only where the package itself cannot provide the dependency:
+        # `activity` on 3.12, one test. Anything else is a gap in EXTRAS.
         env:
           MPLBACKEND: Agg
         run: |
           python -m pytest tests -q -rs 2>&1 | tee /tmp/pytest_skips.txt
           SKIPPED=$(grep -cE '^SKIPPED' /tmp/pytest_skips.txt || true)
-          echo "skipped: ${SKIPPED:-0}"
-          if [ "${SKIPPED:-0}" -gt 0 ]; then
-            echo "::error::${SKIPPED} test(s) skipped; add the missing extra to EXTRAS"
-            grep -E '^SKIPPED' /tmp/pytest_skips.txt
+          ALLOWED="${{ steps.extras.outputs.expect_skips }}"
+          echo "skipped: ${SKIPPED:-0} (allowed: ${ALLOWED})"
+          grep -E '^SKIPPED' /tmp/pytest_skips.txt || true
+          if [ "${SKIPPED:-0}" -gt "${ALLOWED}" ]; then
+            echo "::error::${SKIPPED} test(s) skipped, only ${ALLOWED} are explained by the environment"
             exit 1
           fi
 
@@ -174,8 +197,9 @@ jobs:
           WHEEL=$(ls dist/*.whl)
           echo "installing ${WHEEL}"
           # The extras resolve from the wheel's own metadata, which is the point:
-          # this is what a user gets from `pip install easyepi[...]`.
-          /tmp/clean/bin/python -m pip install "${WHEEL}[${EXTRAS}]"
+          # this is what a user gets from `pip install easyepi[...]`. On 3.12 the
+          # `activity` marker leaves decoupler out, exactly as it would for a user.
+          /tmp/clean/bin/python -m pip install "${WHEEL}[${EXTRAS_COMMON},activity]"
 
       - name: The installed package works
         env:
