@@ -31,7 +31,7 @@ Writes `sample/sample_peaks.narrowPeak` (or `.broadPeak` with `--broad`) and a
 
 ```bash
 easyepi qc --assay atac --bam sample.bam --bigwig tracks/sample.bw \
-    --peak peaks/sample.narrowPeak --out qc/sample.json
+    --peak peaks/sample/sample_peaks.narrowPeak --out qc/sample.json
 ```
 
 `qc` is the single QC entry point; `--assay` selects which metrics apply —
