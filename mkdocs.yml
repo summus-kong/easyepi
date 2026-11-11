@@ -77,6 +77,7 @@ nav:
       - differential-peaks: commands/differential-peaks.md
       - visualisation: commands/viz.md
   - API reference:
+      - easyepi.assays: api/assays.md
       - easyepi.bam2bigwig: api/bam2bigwig.md
       - easyepi.coverage_parallel: api/coverage_parallel.md
       - easyepi.peaks_cli: api/peaks_cli.md

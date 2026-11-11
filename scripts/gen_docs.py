@@ -30,6 +30,8 @@ API_MODULES: list[tuple[str, str]] = [
      "BAM to BigWig coverage, with the shift, normalisation and I/O decisions."),
     ("easyepi.coverage_parallel",
      "Chunked, process-parallel accumulation of per-base depth."),
+    ("easyepi.assays",
+     "The one assay vocabulary every command resolves its --assay against."),
     ("easyepi.peaks_cli",
      "Peak calling through MACS3 as a library, with the assay defaults."),
     ("easyepi.macs_options",
