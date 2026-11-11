@@ -83,3 +83,29 @@ def test_no_module_keeps_its_own_alias_table():
 
     for module in (metrics, b2b, peaks):
         assert not hasattr(module, "_ASSAY_SPELLINGS"), module.__name__
+
+
+# --------------------------------------------------------------------- peaks specifics
+def test_peaks_choices_come_from_the_shared_table():
+    """`peaks` must offer the shared spellings minus the assays MACS3 cannot do."""
+    from easyepi.cli import build_parser
+
+    parser = build_parser()
+    subs = {}
+    for action in parser._actions:
+        if hasattr(action, "choices") and hasattr(action.choices, "keys"):
+            subs = action.choices
+            break
+    peaks = subs["peaks"]
+    choices = []
+    for action in peaks._actions:
+        if action.dest == "assay":
+            choices = list(action.choices or [])
+
+    assert choices, "peaks --assay has no choices"
+    assert "methylation" not in choices
+    assert "wgbs" not in choices
+    # every offered spelling must resolve into the peaks table
+    from easyepi.peaks_cli import ASSAY_CHOICES as PEAK_TABLE
+    for spelling in choices:
+        assert canonical_assay(spelling) in PEAK_TABLE, spelling
