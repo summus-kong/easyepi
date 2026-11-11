@@ -1,13 +1,14 @@
 # easyepi
 
 Bulk epigenomics downstream analysis in pure Python. Every tool takes an aligned
-**BAM** and writes ordinary files — BigWig, BED, TSV, JSON, PNG. No external caller
-is required, and no step depends on another having been run first.
+**BAM** and writes ordinary files — BigWig, BED, TSV, JSON, PNG. Peak calling imports
+MACS3, so that package must be installed; no other external program is
+needed, and no step depends on another having been run first.
 
 ```bash
 pip install "easyepi[bam,viz]"
 easyepi bam2bw sample.bam -o tracks/ --assay atac
-easyepi peaks tracks/sample.bw -o peaks/ --assay atac
+easyepi peaks sample.bam -o peaks/ --assay atac
 ```
 
 ## What it covers
@@ -49,7 +50,8 @@ than beta-binomial says so in its own output.
 Release candidate. The test suite establishes software behaviour, not biological
 validity: `pytest tests -q` passes on Linux, `maintenance/verify_linux.py` checks the
 CLI surface, and `scripts/verify_macs3_concordance.py` proves the MACS3 wrapper
-produces byte-identical peaks to a direct `macs3 callpeak`. The pure-Python callers
-have no equivalent external concordance study yet.
+produces byte-identical peaks to a direct `macs3 callpeak`. The legacy pure-Python
+helpers exported from `easyepi` have no equivalent external concordance study and are
+not reachable from `easyepi peaks`.
 
 License: BSD-3-Clause.

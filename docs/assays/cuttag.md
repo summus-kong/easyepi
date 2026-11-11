@@ -6,9 +6,9 @@ high signal-to-noise ratio at low sequencing depth.
 
 ```bash
 easyepi bam2bw cuttag.bam -o tracks/ --assay cuttag --jobs 8
-easyepi peaks tracks/cuttag.bw -o peaks/ --assay cuttag
+easyepi peaks cuttag.bam -o peaks/ --assay cuttag
 easyepi qc --assay chip --bam cuttag.bam --bigwig tracks/cuttag.bw \
-    --peak peaks/cuttag.narrowPeak --out qc/cuttag.json
+    --peak peaks/cuttag/cuttag_peaks.narrowPeak --out qc/cuttag.json
 ```
 
 `--assay cuttag` and `--assay cut&run` are aliases of the Tn5 defaults (shift=tn5,

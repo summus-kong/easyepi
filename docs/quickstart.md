@@ -21,10 +21,11 @@ easyepi bam2bw rep1.bam rep2.bam -o tracks/ --assay chip --jobs 8
 ## 2. Peaks
 
 ```bash
-easyepi peaks tracks/sample.bw -o peaks/ --assay atac
+easyepi peaks sample.bam -o peaks/ --assay atac
 ```
 
-Writes `sample.narrowPeak` (or `.broadPeak` with `--broad`).
+Writes `sample/sample_peaks.narrowPeak` (or `.broadPeak` with `--broad`) and a
+`peaks_manifest.json` recording the MACS3 options that produced it.
 
 ## 3. Quality control
 
@@ -40,7 +41,8 @@ are skipped and reported as `not_evaluated`, never as passing.
 ## 4. Annotation
 
 ```bash
-easyepi annotate peaks/sample.narrowPeak --gtf genes.gtf -o annot/
+easyepi annotate --peaks peaks/sample/sample_peaks.narrowPeak \
+    --gtf genes.gtf --out annot/
 ```
 
 ## 5. Figures

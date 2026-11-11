@@ -283,8 +283,7 @@ protection.
 
 ```bash
 easyepi gene-panel \
-  --bigwig H3K4me3,H3K27ac,H3K4me1,H3K27me3 \
-  --bigwig-dir /data/bigwigs \
+  --bigwig H3K4me3=/data/bigwigs/H3K4me3.bw,H3K27ac=/data/bigwigs/H3K27ac.bw,H3K4me1=/data/bigwigs/H3K4me1.bw,H3K27me3=/data/bigwigs/H3K27me3.bw \
   --gtf gencode.annotation.gtf.gz \
   --gene AGRN,PLCH2,SKI,TP73 \
   --flank 3000 --bin-size 50 \

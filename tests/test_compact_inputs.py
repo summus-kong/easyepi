@@ -62,6 +62,34 @@ def test_peaks_bare_labels_resolve_both_dirs(tmp_path):
     assert got["ctrl1"]["peak"].endswith("ctrl1.narrowPeak")
 
 
+def test_peaks_resolve_the_layout_easyepi_peaks_writes(tmp_path):
+    """`peaks` writes `<stem>/<stem>_peaks.narrowPeak`; --peak-dir must find it.
+
+    The per-sample subdirectory was added so two runs cannot collide, which left
+    every peak file one level deeper than `--peak-dir` used to look.
+    """
+    for name in ("ctrl1", "ctrl2"):
+        _touch(tmp_path / "bams" / f"{name}.bam")
+        _touch(tmp_path / "peaks" / name / f"{name}_peaks.narrowPeak")
+    got = parse_peak_specs(["ctrl1,ctrl2"],
+                           bam_dir=tmp_path / "bams",
+                           peak_dir=tmp_path / "peaks")
+    assert sorted(got) == ["ctrl1", "ctrl2"]
+    assert got["ctrl1"]["peak"].replace("\\", "/").endswith(
+        "peaks/ctrl1/ctrl1_peaks.narrowPeak")
+
+
+def test_peaks_flat_layout_still_resolves(tmp_path):
+    """A hand-assembled flat folder must keep working after that change."""
+    for name in ("ctrl1", "ctrl2"):
+        _touch(tmp_path / "bams" / f"{name}.bam")
+        _touch(tmp_path / "peaks" / f"{name}.narrowPeak")
+    got = parse_peak_specs(["ctrl1,ctrl2"],
+                           bam_dir=tmp_path / "bams",
+                           peak_dir=tmp_path / "peaks")
+    assert got["ctrl1"]["peak"].replace("\\", "/").endswith("peaks/ctrl1.narrowPeak")
+
+
 def test_peaks_missing_bam_reports_the_dir(tmp_path):
     _touch(tmp_path / "peaks" / "x.narrowPeak")
     with pytest.raises(FileNotFoundError, match="could not resolve"):

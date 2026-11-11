@@ -22,8 +22,9 @@ from easyepi import __version__
 MINIMAL_EXAMPLE: dict[str, str] = {
     "bam2bw": "easyepi bam2bw sample.bam -o tracks/ --assay atac",
     "qc": "easyepi qc --assay atac --bam sample.bam --out qc.json",
-    "peaks": "easyepi peaks tracks/sample.bw -o peaks/ --assay atac",
-    "annotate": "easyepi annotate peaks/sample.narrowPeak --gtf genes.gtf -o annot/",
+    "peaks": "easyepi peaks sample.bam -o peaks/ --assay atac",
+    "annotate": "easyepi annotate --peaks peaks/sample/sample_peaks.narrowPeak "
+                "--gtf genes.gtf --out annot/",
     "tf-annotate": "easyepi tf-annotate --peaks p.narrowPeak --genome-fasta g.fa "
                    "--motifs jaspar.pfm --out motifs/",
     "motifs": "easyepi motifs --peaks p.narrowPeak --genome-fasta g.fa "
@@ -67,8 +68,12 @@ class EasyepiParser(argparse.ArgumentParser):
         self.exit(2, text + "\n")
 
 
-ASSAY_CHOICES_FOR_CLI = ("atac", "cut&tag", "cut&run", "chip",
-                         "histone", "mnase", "methylation")
+#: Canonical labels plus the shell-safe spellings. `&` is a shell operator, so
+#: `--assay cut&tag` must be quoted; accepting `cuttag` and `cutrun` unquoted is
+#: what the assay pages tell a user to type. Both forms resolve to one table key
+#: (see ``bam2bw_cli._ASSAY_SPELLINGS``).
+ASSAY_CHOICES_FOR_CLI = ("atac", "cut&tag", "cut&run", "cuttag", "cutrun",
+                         "chip", "histone", "mnase", "methylation")
 
 
 def _cmd_merge_qc_reports(args):
@@ -508,7 +513,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_pk.add_argument("-c", "--control", action="append", default=None,
                       help="control BAM(s); repeatable or comma-separated")
     p_pk.add_argument("-o", "--out", required=True, help="output directory")
-    p_pk.add_argument("--assay", default=None, choices=list(ASSAY_CHOICES_FOR_CLI),
+    # `methylation` is dropped: ASSAY_CHOICES_FOR_CLI is shared with `bam2bw`, but
+    # MACS3 has no bisulfite mode, so offering it here promised a mode that
+    # the command rejects. CUT&Tag keeps the bam2bw spelling; peaks_cli
+    # normalises it to its own table key.
+    p_pk.add_argument("--assay", default=None,
+                      choices=[a for a in ASSAY_CHOICES_FOR_CLI
+                               if a != "methylation"],
                       help="sets format and broad/narrow defaults")
     p_pk.add_argument("--format", default=None,
                       help="MACS3 format: BAM, BAMPE, BED, BEDPE (default from --assay)")

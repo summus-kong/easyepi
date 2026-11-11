@@ -1,7 +1,7 @@
 # easyepi annotate
 
 ```bash
-easyepi annotate peaks/sample.narrowPeak --gtf genes.gtf -o annot/
+easyepi annotate --peaks peaks/sample/sample_peaks.narrowPeak --gtf genes.gtf --out annot/
 ```
 
 ## Options

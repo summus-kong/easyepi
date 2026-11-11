@@ -8,10 +8,10 @@ insertion site, not the read body, so `bam2bw --assay atac` applies the standard
 
 ```bash
 easyepi bam2bw atac.bam -o tracks/ --assay atac --jobs 8
-easyepi peaks tracks/atac.bw -o peaks/ --assay atac
+easyepi peaks atac.bam -o peaks/ --assay atac
 easyepi qc --assay atac --bam atac.bam --bigwig tracks/atac.bw \
-    --peak peaks/atac.narrowPeak --out qc/atac.json
-easyepi footprint --bigwig tracks/atac.bw --target peaks/atac.narrowPeak \
+    --peak peaks/atac/atac_peaks.narrowPeak --out qc/atac.json
+easyepi footprint --bigwig tracks/atac.bw --target peaks/atac/atac_peaks.narrowPeak \
     --chrom chr1 --start 0 --end 5000000 --flank 100 --out fp/
 ```
 

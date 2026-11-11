@@ -1,7 +1,7 @@
 # easyepi peaks
 
 ```bash
-easyepi peaks tracks/sample.bw -o peaks/ --assay atac
+easyepi peaks sample.bam -o peaks/ --assay atac
 ```
 
 ## Options

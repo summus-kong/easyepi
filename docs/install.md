@@ -50,16 +50,24 @@ If an optional dependency is missing, the first command that needs it fails with
 exact install line for the interpreter that is running — not a bare
 `ModuleNotFoundError`.
 
-## External programs (optional)
+## External tools
 
-| Program | Used by | Without it |
+`easyepi peaks` needs MACS3. It is imported as a Python library, so the `macs3`
+executable does not have to be on `PATH`, but the package must be installed in the
+same environment that runs `easyepi`. Nothing else here is required:
+
+| Tool | Used by | Without it |
 | --- | --- | --- |
-| `macs3` | `easyepi peaks` | falls back to the built-in Poisson caller |
+| `macs3` (Python package) | `easyepi peaks` | command stops and prints the install line |
 | `samtools` | convenience only | not required |
 | `bedtools` | convenience only | not required |
 
-`bam2bw`, `qc`, `dmr`, `tf-annotate`, `annotate`, `footprint` and the figure commands
-need no external program at all.
+```bash
+python -m pip install macs3
+```
+
+`bam2bw`, `qc`, `dmr`, `tf-annotate`, `annotate`, `footprint` and the figure
+commands need no external program at all.
 
 ## From source
 

@@ -42,6 +42,12 @@ ASSAY_MACS_OPTIONS: dict[str, dict[str, Any]] = {
 
 ASSAY_CHOICES = tuple(ASSAY_MACS_OPTIONS)
 
+#: Spellings accepted on the command line -> keys of ``ASSAY_MACS_OPTIONS``.
+_ASSAY_SPELLINGS: dict[str, str] = {
+    "cut&tag": "cuttag", "cut&run": "cutrun",
+    "cut-tag": "cuttag", "cut-run": "cutrun",
+}
+
 _BAM_EXTS = (".bam",)
 
 
@@ -89,7 +95,11 @@ def run_peaks_command(args) -> int:
             "no input: peak calling needs a BAM",
             example="easyepi peaks sample.bam -o peaks/ --assay atac")
 
+    # `cut&tag` and `cut&run` are the spellings `bam2bw` accepts and the docs use, so
+    # peak calling accepts them too rather than rejecting a label the same study
+    # typed one step earlier.
     assay = (getattr(args, "assay", None) or "").strip().lower()
+    assay = _ASSAY_SPELLINGS.get(assay, assay)
     if assay and assay not in ASSAY_MACS_OPTIONS:
         raise UsageError(
             f"unknown assay {assay!r}; choose one of {', '.join(ASSAY_CHOICES)}",

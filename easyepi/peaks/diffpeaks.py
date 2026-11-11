@@ -386,14 +386,21 @@ def parse_peak_specs(items, bam_dir=None, peak_dir=None,
         if directory is None:
             return None
         base = Path(directory)
+        # Two layouts are in use. `easyepi peaks` writes one subdirectory per
+        # sample (`peaks/<stem>/<stem>_peaks.narrowPeak`) so two runs cannot
+        # collide; a flat folder of `<stem>.narrowPeak` is what a user assembles
+        # by hand. Accept both, flat first, so an existing study keeps working.
         found = [base / f"{stem}{ext}" for ext in exts]
+        found += [base / stem / f"{stem}_peaks{ext}" for ext in exts]
         found = [p for p in found if p.exists()]
         if not found:
             return None
         if len(found) > 1:
-            raise ValueError(
-                f"'{stem}' is ambiguous in {base}: "
-                + ", ".join(p.name for p in found))
+            distinct = sorted({p.resolve() for p in found})
+            if len(distinct) > 1:
+                raise ValueError(
+                    f"'{stem}' is ambiguous in {base}: "
+                    + ", ".join(str(p.relative_to(base)) for p in distinct))
         return found[0]
 
     out: dict[str, dict[str, str]] = {}

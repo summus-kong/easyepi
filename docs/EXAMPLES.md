@@ -19,22 +19,23 @@ BAM -> BigWig (Tn5 cut sites) -> peaks -> annotation -> footprint -> figure.
 # 1. BAM -> BigWig, Tn5-shifted, CPM-normalised, 8 workers
 easyepi bam2bw atac_rep1.bam -o tracks/ --assay atac --jobs 8
 
-# 2. Peaks from the BigWig
-easyepi peaks tracks/atac_rep1.bw -o peaks/ --assay atac --broad=false
+# 2. Peaks from the BAM (MACS3 reads alignments, not tracks)
+easyepi peaks atac_rep1.bam -o peaks/ --assay atac
 
 # 3. Library QC: fragment periodicity, FRiP, signal enrichment
 easyepi qc --assay atac \
     --bam atac_rep1.bam \
     --bigwig tracks/atac_rep1.bw \
-    --peak peaks/atac_rep1.narrowPeak \
+    --peak peaks/atac_rep1/atac_rep1_peaks.narrowPeak \
     --out qc/atac_rep1.json
 
 # 4. Peaks to genes
-easyepi annotate peaks/atac_rep1.narrowPeak --gtf genes.gtf -o annot/
+easyepi annotate --peaks peaks/atac_rep1/atac_rep1_peaks.narrowPeak \
+    --gtf genes.gtf --out annot/
 
 # 5. Accessibility profile around the peaks (nucleosome-depleted region)
 easyepi footprint --bigwig tracks/atac_rep1.bw \
-    --target peaks/atac_rep1.narrowPeak \
+    --target peaks/atac_rep1/atac_rep1_peaks.narrowPeak \
     --chrom chr1 --start 0 --end 5000000 \
     --flank 100 --out fp/ --figure-format png
 ```
@@ -56,17 +57,17 @@ the region. Widen the window or match it to the peaks.
 # 1. BAM -> BigWig, read-body depth (no Tn5 shift), CPM
 easyepi bam2bw chip_tf.bam -o tracks/ --assay chip --jobs 8
 
-# 2. Narrow peaks with the pure-Python caller
-easyepi peaks tracks/chip_tf.bw -o peaks/ --assay chip
+# 2. Narrow peaks with MACS3, via the imported library
+easyepi peaks chip_tf.bam -o peaks/ --assay chip
 
 # 3. QC: FRiP and enrichment at the peaks
 easyepi qc --assay chip \
     --bam chip_tf.bam --bigwig tracks/chip_tf.bw \
-    --peak peaks/chip_tf.narrowPeak --out qc/chip_tf.json
+    --peak peaks/chip_tf/chip_tf_peaks.narrowPeak --out qc/chip_tf.json
 
 # 4. Which TFs can bind these peaks
 easyepi tf-annotate \
-    --peaks peaks/chip_tf.narrowPeak \
+    --peaks peaks/chip_tf/chip_tf_peaks.narrowPeak \
     --genome-fasta genome.fa \
     --motifs jaspar_subset.pfm \
     --fpr 1e-4 --top 5 --out motifs/ --figure-format png
@@ -83,13 +84,10 @@ cannot reach `--fpr 1e-4` and is reported in `skipped_motifs` rather than as
 ```bash
 # Per-mark peaks: broad marks need --broad
 easyepi bam2bw h3k27me3.bam -o tracks/ --assay histone --jobs 8
-easyepi peaks tracks/h3k27me3.bw -o peaks/ --assay histone --broad
+easyepi peaks h3k27me3.bam -o peaks/ --assay histone --broad
 
 # Chromatin states across several marks
-easyepi bam2bw h3k4me3.bam -o tracks/ --assay histone &
-easyepi bam2bw h3k27ac.bam -o tracks/ --assay histone &
-easyepi bam2bw h3k4me1.bam -o tracks/ --assay histone &
-wait
+easyepi bam2bw h3k4me3.bam h3k27ac.bam h3k4me1.bam -o tracks/ --assay histone --jobs 8
 
 easyepi histone-states \
     --signal H3K4me3=tracks/h3k4me3.bg,H3K27ac=tracks/h3k27ac.bg,H3K4me1=tracks/h3k4me1.bg \
@@ -116,9 +114,10 @@ Same path as ATAC: the signal is the Tn5 cut site.
 
 ```bash
 easyepi bam2bw cuttag.bam -o tracks/ --assay cut\&tag --jobs 8
-easyepi peaks tracks/cuttag.bw -o peaks/ --assay cut\&tag
+easyepi peaks cuttag.bam -o peaks/ --assay cut\&tag
 easyepi qc --assay chip --bam cuttag.bam \
-    --bigwig tracks/cuttag.bw --peak peaks/cuttag.narrowPeak --out qc/cuttag.json
+    --bigwig tracks/cuttag.bw --peak peaks/cuttag/cuttag_peaks.narrowPeak \
+    --out qc/cuttag.json
 ```
 
 `--assay cut&tag` sets shift=tn5 and bin=10; the quoting is needed because `&` is a
@@ -133,7 +132,7 @@ Occupancy and periodicity from a signal track; dyad calls need paired-end fragme
 ```bash
 # Occupancy and periodicity from the signal
 easyepi bam2bw mnase.bam -o tracks/ --assay mnase --jobs 8
-easyepi nucleosome --bigwig tracks/mnase.bw --out nuc/ --figure-format png
+easyepi nucleosome --bam mnase.bam --out nuc/ --figure-format png
 
 # Dyad calling from paired-end fragments (single-end is refused)
 easyepi nucleosome-positioning \
@@ -186,7 +185,7 @@ metilene remain the reference; this is a transparent fast screen.
 # Per-sample tracks and peaks
 for s in ctrl1 ctrl2 trt1 trt2; do
     easyepi bam2bw ${s}.bam -o tracks/ --assay atac --jobs 4
-    easyepi peaks tracks/${s}.bw -o peaks/ --assay atac
+    easyepi peaks ${s}.bam -o peaks/ --assay atac
 done
 
 # Differential accessibility with a negative-binomial model
@@ -214,9 +213,9 @@ from easyepi.viz.panels import plot_upset
 from easyepi.peaks.diffpeaks import read_peaks
 
 sets = {name: read_peaks(path) for name, path in
-        [("H3K4me3", "peaks/h3k4me3.narrowPeak"),
-         ("H3K27ac", "peaks/h3k27ac.narrowPeak"),
-         ("H3K27me3", "peaks/h3k27me3.broadPeak")]}
+        [("H3K4me3", "peaks/h3k4me3/h3k4me3_peaks.narrowPeak"),
+         ("H3K27ac", "peaks/h3k27ac/h3k27ac_peaks.narrowPeak"),
+         ("H3K27me3", "peaks/h3k27me3/h3k27me3_peaks.broadPeak")]}
 
 # base-pair Jaccard is width-robust; interval counts overstate broad domains
 print(jaccard_bp(sets["H3K4me3"], sets["H3K27ac"]))

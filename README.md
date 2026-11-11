@@ -1,8 +1,9 @@
 # easyepi
 
 Bulk epigenomics downstream analysis in pure Python. Every tool takes an aligned
-**BAM** and writes ordinary files (BigWig, BED, TSV, JSON, PNG). No external caller
-is required, and no step depends on another having been run first.
+**BAM** and writes ordinary files (BigWig, BED, TSV, JSON, PNG). Peak calling imports
+MACS3, so that package must be installed; no other external program is
+needed, and no step depends on another having been run first.
 
 ```bash
 pip install -e ".[bam,viz]"      # pysam, pyBigWig, matplotlib, hmmlearn
@@ -25,8 +26,9 @@ A minimal run (ChIP/ATAC):
 
 ```bash
 easyepi bam2bw sample.bam -o tracks/ --assay atac      # 1. BAM -> BigWig
-easyepi peaks tracks/sample.bw -o peaks/ --assay atac   # 2. call peaks
-easyepi annotate peaks/sample.narrowPeak --gtf genes.gtf -o annot/
+easyepi peaks sample.bam -o peaks/ --assay atac   # 2. call peaks
+easyepi annotate --peaks peaks/sample/sample_peaks.narrowPeak \
+    --gtf genes.gtf --out annot/
 easyepi qc --assay atac --bam sample.bam --out qc.json  # anywhere in the chain
 ```
 
@@ -67,7 +69,7 @@ refused with an explanation rather than treated as unmethylated.
 ### Peaks
 | Command | Purpose |
 | --- | --- |
-| `peaks` | MACS3 wrapper, or the pure-Python Poisson caller; narrow or broad |
+| `peaks` | MACS3 (imported as a library); narrow or broad; `--macs-arg` passthrough |
 | `differential-peaks` | Consensus peaks -> counts -> TMM -> negative binomial -> BH FDR |
 | `diff` | Exploratory two-group comparison of a normalised matrix |
 

@@ -191,7 +191,8 @@ The wrapper is argument-transparent: it produces byte-identical peak files to a
 hand-written `macs3 callpeak` with the same documented flags. This rules out the
 failure mode a wrapper can introduce (silently changed parameters). It does **not**
 show that the peaks are biologically correct, and it says nothing about the
-pure-Python callers, which are a separate code path.
+legacy pure-Python helpers still importable from `easyepi`, which are a separate code
+path and are not reachable from `easyepi peaks`.
 
 ### FRiP guard
 

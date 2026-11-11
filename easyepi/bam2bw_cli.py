@@ -33,6 +33,14 @@ ASSAY_DEFAULTS: dict[str, dict[str, Any]] = {
 
 ASSAY_CHOICES = tuple(ASSAY_DEFAULTS)
 
+#: Shell-safe spellings a user may type instead of the canonical key. `&` is a
+#: shell operator, so `--assay cut&tag` has to be quoted; accepting the unquoted
+#: `cuttag` is what the assay pages and the docs' own advice promise.
+_ASSAY_SPELLINGS: dict[str, str] = {
+    "cuttag": "cut&tag", "cutrun": "cut&run",
+    "cut-tag": "cut&tag", "cut-run": "cut&run",
+}
+
 
 def resolve_defaults(assay: str | None) -> dict[str, Any]:
     """Per-assay defaults, with a neutral fallback when no assay is stated.
@@ -45,6 +53,7 @@ def resolve_defaults(assay: str | None) -> dict[str, Any]:
         return {"shift": "none", "bin_size": 25, "normalize": "raw",
                 "source": "fallback"}
     key = assay.strip().lower()
+    key = _ASSAY_SPELLINGS.get(key, key)
     if key not in ASSAY_DEFAULTS:
         raise ValueError(
             f"unknown assay {assay!r}; choose one of {', '.join(ASSAY_CHOICES)}")
