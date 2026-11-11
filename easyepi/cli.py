@@ -154,6 +154,11 @@ def _cmd_normalize(args):
     return result
 
 
+def _cmd_peaks_v2(args):
+    from easyepi.peaks_cli import run_peaks_command
+    return run_peaks_command(args)
+
+
 def _cmd_peaks(args):
     from easyepi.peaks import run_peaks
     result = run_peaks(args)
@@ -496,11 +501,30 @@ def build_parser() -> argparse.ArgumentParser:
     add_figure_args(p_norm)
     p_norm.set_defaults(func=_cmd_normalize)
 
-    p_pk = sub.add_parser("peaks", help="legacy entry; use assay-specific MACS3 scripts")
-    p_pk.add_argument("--bam", action="append")
+    p_pk = sub.add_parser(
+        "peaks",
+        help="call peaks from a BAM or a BigWig; MACS3 when available, the "
+             "built-in Poisson caller otherwise")
+    p_pk.add_argument("--bam", action="append", default=None,
+                      help="BAM input(s); repeatable or comma-separated")
+    p_pk.add_argument("--bigwig", action="append", default=None,
+                      help="BigWig input(s); repeatable or comma-separated")
+    p_pk.add_argument("--assay", default=None, choices=list(ASSAY_CHOICES_FOR_CLI),
+                      help="selects calling defaults (shift, broad output)")
+    p_pk.add_argument("--broad", action="store_true", default=None,
+                      help="write a broadPeak file (default comes from --assay)")
+    p_pk.add_argument("--backend", default="auto",
+                      choices=["auto", "macs3", "native"],
+                      help="caller to use; auto prefers MACS3 when installed")
+    p_pk.add_argument("--chrom", default=None,
+                      help="restrict to these chromosomes (comma-separated)")
+    p_pk.add_argument("--bin-size", type=int, default=200, dest="bin_size")
+    p_pk.add_argument("--threshold", type=float, default=5.0,
+                      help="fold-change threshold for the built-in caller")
+    p_pk.add_argument("--max-qvalue", type=float, default=0.01, dest="max_qvalue")
     p_pk.add_argument("--out", required=True)
     add_figure_args(p_pk)
-    p_pk.set_defaults(func=_cmd_peaks)
+    p_pk.set_defaults(func=_cmd_peaks_v2)
 
     p_an = sub.add_parser("annotate", help="peak annotation and enrichment")
     p_an.add_argument("--peaks", required=True)

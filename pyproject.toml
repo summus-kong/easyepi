@@ -13,8 +13,15 @@ license-files = ["LICENSE"]
 authors = [{ name = "houwb" }]
 keywords = ["epigenomics", "CUT&Tag", "ChIP-seq", "ATAC-seq", "MNase", "peak", "nucleosome"]
 classifiers = [
-    "Programming Language :: Python :: 3",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
     "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Bio-Informatics",
 ]
 # Core runtime dependencies
@@ -57,11 +64,11 @@ all = [
 easyepi = "easyepi.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/houwb/easyepi"
-Repository = "https://github.com/houwb/easyepi"
-Documentation = "https://github.com/houwb/easyepi/tree/main/docs"
-Issues = "https://github.com/houwb/easyepi/issues"
-
+Homepage = "https://github.com/summus-kong/easyepi"
+Repository = "https://github.com/summus-kong/easyepi"
+Documentation = "https://summus-kong.github.io/easyepi/"
+Changelog = "https://github.com/summus-kong/easyepi/blob/main/CHANGELOG.md"
+Issues = "https://github.com/summus-kong/easyepi/issues"
 [tool.setuptools.packages.find]
 include = ["easyepi*"]
 exclude = ["easyepi.python*", "easyepi.backends*", "easyepi.scripts*"]

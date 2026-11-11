@@ -1,8 +1,18 @@
 name: docs
 
-# Builds the MkDocs site and publishes it to GitHub Pages on every push to main.
-# The site is generated here rather than committed, so the API reference always
-# matches the code that is on the branch.
+# Builds the MkDocs site on every push and publishes it to GitHub Pages.
+#
+# The build job is the verification: it regenerates the command/API pages from the
+# live parser, fails if they differ from what is committed, and builds with
+# `mkdocs build --strict` (any broken link or missing nav target is an error).
+#
+# The deploy job only runs on main and only when Pages has been enabled for the
+# repository. It used to fail with `HttpError: Not Found` on every run because Pages
+# was never switched on -- a repository setting, not a code defect -- which made a
+# green build look like a red workflow and hid whether the docs were valid.
+# `pages_enabled` probes that setting first so the outcome is honest:
+#   - Pages on  -> build, deploy, publish
+#   - Pages off -> build only, with a notice saying how to turn publishing on
 
 on:
   push:
@@ -31,6 +41,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      pages_enabled: ${{ steps.probe.outputs.enabled }}
     steps:
       - uses: actions/checkout@v4
 
@@ -42,14 +54,11 @@ jobs:
       - name: Install package and docs tooling
         run: |
           python -m pip install --upgrade pip
-          # dev brings pytest, which the test step needs; without it the
-          # step exits 127 and the whole docs build fails.
+          # dev brings pytest, which the test step needs
           pip install -e ".[bam,viz,dev]"
           pip install mkdocs mkdocs-material "mkdocstrings[python]"
 
       - name: Regenerate command and API pages from the live parser
-        # A renamed flag or a new subcommand must show up in the published reference.
-        # The diff check fails the build instead of letting the docs drift.
         run: |
           python scripts/gen_docs.py
           if ! git diff --quiet docs/commands docs/api; then
@@ -64,13 +73,28 @@ jobs:
       - name: Build site (strict)
         run: mkdocs build --strict
 
+      - name: Probe whether Pages is enabled for this repository
+        id: probe
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The Pages API returns 404 when publishing has never been enabled. That
+          # is a configuration state, so it must not be reported as a build failure.
+          if gh api "repos/${{ github.repository }}/pages" >/dev/null 2>&1; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "GitHub Pages is enabled; the site will be published."
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Pages not enabled::The site built successfully but was not published. Enable it under Settings -> Pages -> Source: GitHub Actions, then re-run this workflow."
+          fi
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
   deploy:
     needs: build
-    if: github.event_name != 'pull_request'
+    if: needs.build.outputs.pages_enabled == 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
