@@ -56,7 +56,11 @@ ASSAY_INPUTS: dict[str, tuple[str, ...]] = {
     "chip": ("bam", "bigwig", "peak"),
     "histone": ("bam", "bigwig", "peak"),
     "mnase": ("bam",),
-    "methylation": ("methylation",),
+    # A bisulfite BAM is the documented and preferred input: the aligner
+    # writes 5mC onto the record (MM/ML or Bismark XM), so `--bam` alone is
+    # enough. A `.cov`/`.bedMethyl` table stays accepted for data that
+    # arrives already called, which is why both names are listed.
+    "methylation": ("bam", "methylation"),
 }
 
 
@@ -100,6 +104,22 @@ def resolve_assay(
         "guessed.")
 
 
+def canonical_assay(assay: str) -> str:
+    """Normalise any accepted spelling to its table key.
+
+    `resolve_assay` accepts 21 spellings ("ATAC", "cut&tag", "wgbs", ...) but
+    the tables are keyed by the five canonical names. Every function that
+    indexes a table goes through here, so a spelling that `resolve_assay`
+    returns cannot raise KeyError one call later.
+    """
+    key = ASSAY_ALIASES.get(str(assay).strip().lower())
+    if key is None:
+        raise AssayError(
+            f"unknown assay {assay!r}; choose one of "
+            + ", ".join(sorted(set(ASSAY_ALIASES.values()))))
+    return key
+
+
 def check_inputs(assay: str, available: dict[str, dict[str, str]]) -> list[str]:
     """Return human-readable notes about inputs this assay cannot use.
 
@@ -107,19 +127,25 @@ def check_inputs(assay: str, available: dict[str, dict[str, str]]) -> list[str]:
     BigWig-only metrics are simply not computed. The note exists so the user is not
     surprised by missing columns.
     """
-    usable = set(ASSAY_INPUTS[assay])
+    key = canonical_assay(assay)
+    usable = set(ASSAY_INPUTS[key])
     present = {kind for tracks in available.values() for kind in tracks}
     unusable = present - usable
     notes = []
     if unusable:
         notes.append(
-            f"{assay} QC does not use: {', '.join(sorted(unusable))}; "
+            f"{key} QC does not use: {', '.join(sorted(unusable))}; "
             "these files are ignored")
     for sample, tracks in available.items():
-        if "bam" in usable and "bam" not in tracks:
+        if "bam" in usable and "bam" not in tracks and key != "methylation":
             notes.append(f"{sample}: no BAM, read-based metrics are skipped")
-        if assay == "methylation" and "methylation" not in tracks:
-            notes.append(f"{sample}: no methylation table, beta metrics are skipped")
+        if key == "methylation" and not ({"bam", "methylation"} & set(tracks)):
+            # Either input carries beta: a bisulfite BAM through its MM/ML or XM
+            # tag, or a table that was already called. Only their absence stops
+            # the metric, so the note names both rather than demanding a table.
+            notes.append(
+                f"{sample}: no BAM with MM/ML or XM tags and no methylation "
+                "table, beta metrics are skipped")
     return notes
 
 
@@ -128,7 +154,7 @@ def describe() -> str:
     from easyepi.assay_metrics import ASSAY_METRIC_BUILDERS
 
     lines = ["assay        metrics"]
-    for assay in sorted(set(ASSAY_ALIASES.values())):
+    for assay in sorted({canonical_assay(a) for a in ASSAY_ALIASES}):
         key = f"{assay}-qc"
         metrics = ASSAY_METRIC_BUILDERS.get(key)
         lines.append(f"{assay:12s} {', '.join(metrics) if metrics else 'n/a'}")

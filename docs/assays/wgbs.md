@@ -14,6 +14,17 @@ Reports the beta-value distribution, the hypomethylated/hypermethylated fraction
 bimodality. A BAM with neither tag is refused with an explanation rather than treated
 as unmethylated.
 
+Betas are per CpG dyad and require `--min-coverage` (5 by default) reads at the site;
+sites below it are counted in `methylation_bam.dropped_below_coverage` and left out
+rather than averaged from one or two reads. The report records which encoding was
+used (`MM/ML` or `XM`) and how many reads and calls it read, so a suspiciously thin
+result is visible instead of silent.
+
+A table that was already called (`.cov`, `.bedMethyl`, or any TSV with a `beta`
+column) is also accepted when the calls arrive that way: point `--bam` at the BAM and
+the project file's `methylation` field at the table. When both are present the table
+is used, because it is the input the caller named explicitly.
+
 ## Two-group differential methylation
 
 ```bash
@@ -51,3 +62,5 @@ bsseq or metilene for publication-grade calling. The same sentence is written in
 - reads are aligned to the bisulfite-converted genome; the CIGAR is used, not the
   reference sequence
 - `--context CpG` is the default; CHG and CHH are supported but sparser
+- reading the tags needs `pysam` (`pip install "easyepi[bam]"`); without it the
+  command says which install line is missing instead of reporting no methylation

@@ -60,6 +60,34 @@ def methylation_beta_values(table: Any) -> list[float] | None:
         return None
 
 
+def _beta_from_bam(bam_path: str, payload: dict[str, Any],
+                   min_coverage: int = 5) -> list[float] | None:
+    """Per-CpG beta values read from a bisulfite BAM, or None when it has no tags.
+
+    The BAM is the documented WGBS input, so this is the normal path. Failure is
+    recorded in ``payload`` rather than raised: a BAM without MM/ML or XM tags is a
+    user-input problem, and one unreadable sample must not abort a batch QC run.
+    The returned values are the per-CpG-dyad betas above ``min_coverage``, which is
+    the same unit `beta_distribution` summarises for a table input.
+    """
+    try:
+        from .methylation_bam import (calls_to_dataframe,
+                                      cpg_level_methylation,
+                                      read_methylation_calls)
+        calls, stats = read_methylation_calls(bam_path)
+        frame = calls_to_dataframe(calls, {})
+        sites, site_stats = cpg_level_methylation(frame, min_coverage=min_coverage)
+    except Exception as exc:
+        # Includes "no methylation calls found in this BAM", which is the message a
+        # user needs to see: the tag is missing, not the methylation.
+        payload["methylation_error"] = f"{type(exc).__name__}: {exc}"
+        return None
+    payload["methylation_bam"] = {**stats, **site_stats}
+    if sites.empty:
+        return None
+    return [float(v) for v in sites["beta"].dropna().tolist()]
+
+
 def _peak_covers_bam(peak_path: str | None, bam_path: str | None) -> bool:
     """True when the peak set touches most of the BAM's aligned reference span.
 
@@ -121,13 +149,22 @@ def build_sample_payload(assay: str | None, *,
     blacklist_path = _existing(blacklist)
 
     beta_values = None
-    methylation_path = _existing(methylation)
-    if methylation_path and assay.lower().startswith("methyl"):
-        try:
-            from .methylation import read_methylation_table
-            beta_values = methylation_beta_values(read_methylation_table(methylation_path))
-        except Exception as exc:
-            payload["methylation_error"] = f"{type(exc).__name__}: {exc}"
+    if assay.lower().startswith("methyl"):
+        # Two sources, in the order the documentation promises. A bisulfite BAM
+        # carries the calls on the record (MM/ML or Bismark XM), so `--bam` alone
+        # is the normal case; a pre-called `.cov`/`.bedMethyl` table is accepted
+        # for data that arrives that way. Without this, `qc --assay methylation
+        # --bam x.bam` -- the exact command on the WGBS page -- reported generic
+        # read flags and no beta distribution at all.
+        methylation_path = _existing(methylation)
+        if methylation_path:
+            try:
+                from .methylation import read_methylation_table
+                beta_values = methylation_beta_values(read_methylation_table(methylation_path))
+            except Exception as exc:
+                payload["methylation_error"] = f"{type(exc).__name__}: {exc}"
+        elif bam_path:
+            beta_values = _beta_from_bam(bam_path, payload)
 
     try:
         payload.update(compute_assay_metrics(
