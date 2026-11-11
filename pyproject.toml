@@ -32,7 +32,9 @@ dependencies = [
 bam = ["pysam>=0.22", "pyBigWig>=0.3.22"]
 bigwig = ["pyBigWig>=0.3.22"]
 # matplotlib is only imported when a figure is requested.
-viz = ["matplotlib>=3.7"]
+# scikit-learn is used by the track clustering in `easyepi integrate`; without it
+# that feature raised ModuleNotFoundError in a `[viz]` environment.
+viz = ["matplotlib>=3.7", "scikit-learn>=1.3"]
 # hmmlearn is only needed by `easyepi histone-states`.
 states = ["hmmlearn>=0.3"]
 activity = ["decoupler>=1.9.2,<2"]

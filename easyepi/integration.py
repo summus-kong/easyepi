@@ -128,12 +128,30 @@ def _row_zscore(frame: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame((values - means) / scales, index=frame.index, columns=frame.columns)
 
 
+def _require_sklearn():
+    """Load scikit-learn or raise IntegrationError carrying an install hint.
+
+    The message comes from :mod:`easyepi.errors`, which names the interpreter that is
+    running; the exception type stays ``IntegrationError`` so callers catching this
+    module's error are unaffected.
+    """
+    from easyepi.errors import missing_dependency, require_dependency
+
+    try:
+        return require_dependency(
+            "sklearn", "clustering tracks in `easyepi integrate`")
+    except ImportError as exc:
+        raise IntegrationError(str(exc)) from missing_dependency(
+            "sklearn", "clustering tracks in `easyepi integrate`")
+
+
 def deterministic_kmeans(values: np.ndarray, clusters: int, seed: int = 1, n_init: int = 20, max_iter: int = 300) -> tuple[np.ndarray, float]:
     """Run scikit-learn KMeans with an explicit random seed; return one-based labels and inertia."""
     if values.ndim != 2 or len(values) < clusters or clusters < 2:
         raise IntegrationError("clusters must be >=2 and no larger than the number of complete genes")
     if not np.isfinite(values).all() or len(np.unique(values,axis=0)) < clusters:
         raise IntegrationError("Requested clusters exceed the number of distinct complete profiles")
+    _require_sklearn()
     from sklearn.cluster import KMeans
     model = KMeans(n_clusters=clusters, random_state=seed, n_init=n_init, max_iter=max_iter)
     labels = model.fit_predict(values)
