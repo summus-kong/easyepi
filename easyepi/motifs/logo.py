@@ -12,6 +12,22 @@ from typing import Dict, List, Optional, Sequence
 import numpy as np
 
 
+def _save_path(fig, save) -> None:
+    """Write ``fig`` to ``save``, defaulting to the vector format.
+
+    ``save="logo.png"`` writes a PNG exactly as asked; ``save="logo"`` or
+    ``save="out/logo"`` gets :data:`easyepi._plots.DEFAULT_FIGURE_FORMAT` (PDF),
+    so a caller that just wants the figure does not have to name a format.
+    """
+    from easyepi._plots import DEFAULT_FIGURE_FORMAT
+
+    path = Path(save)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.suffix:
+        path = path.with_suffix("." + DEFAULT_FIGURE_FORMAT)
+    fig.savefig(path, dpi=300)
+
+
 def _plt():
     import matplotlib
     matplotlib.use("Agg")
@@ -57,8 +73,7 @@ def sequence_logo(pwm: np.ndarray, title: str = "", save: Optional[str] = None):
     ax.set_ylabel("bits")
     fig.tight_layout()
     if save:
-        Path(save).parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save, dpi=300)
+        _save_path(fig, save)
     return fig
 
 
@@ -100,6 +115,5 @@ def enrichment_bar(rows: List[Dict], top: int = 10, save: Optional[str] = None):
     ax.set_title("Known motif enrichment")
     fig.tight_layout()
     if save:
-        Path(save).parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save, dpi=300)
+        _save_path(fig, save)
     return fig

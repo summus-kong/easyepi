@@ -21,6 +21,7 @@ easyepi qc --assay atac --bam sample.bam --out qc.json
 | `--max-reads` | optional | `200000` | cap on reads inspected per metric (default: 200000) |
 | `--verbose` | optional |  |  |
 | `--quiet` | optional |  |  |
-| `--figure-format` | optional |  | Optional export format; repeat to export multiple formats. Defaults to pdf (vector) when a figure is produced |
+| `--figure-format` | optional |  | Export format for figures; repeat to export several. Default: pdf (vector) |
+| `--no-figures` | optional |  | Do not write figures; only tables and JSON are produced |
 
 Generated from the live parser by `scripts/gen_docs.py`.

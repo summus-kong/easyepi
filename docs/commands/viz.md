@@ -10,7 +10,8 @@ easyepi viz --regions regions.bed --out viz/ --figure-format pdf
 | --- | --- | --- | --- |
 | `--regions` | required |  |  |
 | `--out` | required |  |  |
-| `--figure-format` | optional |  | Optional export format; repeat to export multiple formats. Defaults to pdf (vector) when a figure is produced |
+| `--figure-format` | optional |  | Export format for figures; repeat to export several. Default: pdf (vector) |
+| `--no-figures` | optional |  | Do not write figures; only tables and JSON are produced |
 | `--verbose` | optional |  | Write detailed logs/run.log |
 | `--log-file` | optional |  | Detailed file log path |
 | `--quiet` | optional |  | Suppress panel logging |

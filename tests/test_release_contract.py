@@ -104,11 +104,20 @@ def test_duplicate_design_is_rejected(tmp_path):
         read_design(path,["a"])
 
 
-def test_no_implicit_figure_export_and_nan_is_not_significant():
+def test_figures_export_as_pdf_by_default_and_nan_is_not_significant():
+    """A run writes figures without being asked; --no-figures turns that off.
+
+    The previous contract was "no flag, no figure", which made a run that should
+    have produced a plot indistinguishable from one that did. The default is now
+    the vector format, with an explicit opt-out for table-only runs.
+    """
     parser = argparse.ArgumentParser()
     add_figure_args(parser)
-    assert selected_formats(parser.parse_args([])) == ()
+    assert selected_formats(parser.parse_args([])) == ("pdf",)
     assert selected_formats(parser.parse_args(["--figure-format","pdf"])) == ("pdf",)
+    assert selected_formats(parser.parse_args(["--no-figures"])) == ()
+    assert selected_formats(
+        parser.parse_args(["--no-figures","--figure-format","png"])) == ("png",)
     fig = plot_volcano(pd.DataFrame({"log2fc":[1.,2.],"padj":[np.nan,.01]}))
     assert len(fig.axes[0].collections[1].get_offsets()) == 1
 
@@ -155,7 +164,10 @@ def test_known_motif_enrichment_uses_score_threshold(tmp_path):
     assert main(["--target",str(target),"--background",str(background),"--pwm",str(pwm),"--out",str(output),"--fpr","0.01"]) == 0
     row=json.loads((output/"motif_enrichment.json").read_text())["motifs"][0]
     assert row["target_hits"]==2 and row["background_hits"]==0
-    assert not (output/"figures").exists()
+    # A run writes its figure without being asked; the vector format is the default.
+    written = sorted(p.name for p in (output / "figures").glob("*"))
+    assert any(n.endswith(".pdf") for n in written), written
+    assert not any(n.endswith(".png") for n in written), written
 
 
 def test_consensus_counts_overlapping_samples(tmp_path):

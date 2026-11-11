@@ -27,6 +27,7 @@ All commands accept the same QC flags:
 --qc-thresholds JSON              override warn thresholds
 --max-reads N                     cap reads inspected per metric (default 200000)
 --figure-format pdf|svg|png       write figures (pdf is the default)
+--no-figures                      do not write figures
 ```
 
 Assay names are normalised, so `ChIP`, `chip`, `ChIP-seq`, `CUT&Tag`, `CUT&RUN`,

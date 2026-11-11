@@ -67,18 +67,57 @@ def figure_dir(out: str | Path) -> Path:
 
 
 def add_figure_args(parser) -> None:
-    """Add optional figure export formats; no files are exported by default."""
+    """Add the figure export options.
+
+    A command that produces figures writes them as PDF unless the user asks for
+    another format; ``--no-figures`` turns writing off. Exporting by default is
+    the useful behaviour for an analysis suite: a run that silently produced no
+    figure used to look identical to one that produced figures elsewhere, and
+    the user had to know a flag existed to get the plot.
+    """
     parser.add_argument("--figure-format", action="append", dest="figure_formats",
                         choices=FIGURE_FORMATS,
                         default=None,
-                        help="Optional export format; repeat to export multiple "
-                             f"formats. Defaults to {DEFAULT_FIGURE_FORMAT} (vector) "
-                             "when a figure is produced")
+                        help="Export format for figures; repeat to export several. "
+                             f"Default: {DEFAULT_FIGURE_FORMAT} (vector)")
+    parser.add_argument("--no-figures", action="store_true", dest="no_figures",
+                        default=False,
+                        help="Do not write figures; only tables and JSON are "
+                             "produced")
 
 
 def selected_formats(args) -> tuple[str, ...]:
-    """Figure formats requested on the command line (empty means no figures)."""
-    return tuple(getattr(args, "figure_formats", None) or ())
+    """Figure formats to write for this run.
+
+    Explicit ``--figure-format`` values win. Otherwise the default (PDF) applies,
+    unless ``--no-figures`` was given. Returns an empty tuple when nothing should
+    be written, which is the single signal every caller already checks.
+    """
+    requested = tuple(getattr(args, "figure_formats", None) or ())
+    if requested:
+        return requested
+    if getattr(args, "no_figures", False):
+        return ()
+    return (DEFAULT_FIGURE_FORMAT,)
+
+
+def _as_frame(value):
+    """Return a DataFrame for a table-like value, or None if it cannot be one.
+
+    Module tables arrive as DataFrames, numpy arrays, or lists of rows. The
+    plotting helpers all assume ``.columns``, so the conversion happens once
+    here rather than in every helper.
+    """
+    import pandas as pd
+
+    if value is None:
+        return None
+    if isinstance(value, pd.DataFrame):
+        return value
+    try:
+        return pd.DataFrame(value)
+    except Exception:                                  # noqa: BLE001
+        return None
 
 
 def _numeric(frame):
@@ -180,6 +219,19 @@ def plot_bar(frame, title: str = ""):
 
 def _bar(frame, fig_dir: Path, stem: str = "metrics",
          formats: tuple[str, ...] = (DEFAULT_FIGURE_FORMAT,)) -> list[str]:
+    """Bar chart of the first numeric column.
+
+    ``frame`` is normally a DataFrame, but `render_module_figures` falls back to
+    ``_bar(tables[0][1], ...)`` and some module tables are plain arrays. Those used
+    to raise ``AttributeError: 'numpy.ndarray' object has no attribute 'to_numpy'``
+    inside ``plot_bar``, and the best-effort wrapper in `render_module_figures`
+    logged it as a warning and returned no figure. That was invisible while
+    figures were opt-in; once they became the default it surfaced as a missing
+    output. Converting here fixes the class of failure, not one call site.
+    """
+    frame = _as_frame(frame)
+    if frame is None:
+        return []
     fig = plot_bar(frame)
     return [] if fig is None else _save(fig, fig_dir, stem, formats=formats)
 
@@ -199,6 +251,9 @@ def plot_distribution(frame, title: str = ""):
 
 def _distribution(frame, fig_dir: Path, stem: str = "distribution",
                   formats: tuple[str, ...] = (DEFAULT_FIGURE_FORMAT,)) -> list[str]:
+    frame = _as_frame(frame)
+    if frame is None:
+        return []
     fig = plot_distribution(frame)
     return [] if fig is None else _save(fig, fig_dir, stem, formats=formats)
 
@@ -223,7 +278,10 @@ def _motif_json(path: Path, fig_dir: Path,
     plt = _mpl()
     vals = pd.to_numeric(frame[value], errors="coerce").fillna(0)
     if value == "padj":
-        vals = np_log10(vals)
+        # np_log10 returns a bare ndarray, which loses `.iloc`/`.argsort().to_numpy()`
+        # further down and raised AttributeError: 'numpy.ndarray' object has no
+        # attribute 'to_numpy'. Keep it a Series so the indexing below is valid.
+        vals = pd.Series(np_log10(vals), index=vals.index, name=vals.name)
         ylabel = "-log10 adjusted p-value"
     else:
         ylabel = value

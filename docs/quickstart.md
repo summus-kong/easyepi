@@ -52,7 +52,8 @@ easyepi gene-panel --bigwig tracks/sample.bw --gtf genes.gtf \
     --gene AGRN,TP73 --out panel/ --figure-format pdf
 ```
 
-Figures are only written when `--figure-format` is given.
+Figures are written as PDF (vector) by default. Pass `--figure-format png` (or svg/tiff/jpg)
+for another format, or `--no-figures` to write only tables and JSON.
 
 ## Bisulfite data
 

@@ -16,6 +16,22 @@ def _plt():
     return plt
 
 
+def _save_path(fig, save) -> None:
+    """Write ``fig`` to ``save``.
+
+    A path with a suffix is honoured exactly (``plot.png`` writes a PNG); a path
+    without one gets :data:`easyepi._plots.DEFAULT_FIGURE_FORMAT`, so the caller
+    does not have to know the default to get vector output.
+    """
+    from easyepi._plots import DEFAULT_FIGURE_FORMAT
+
+    path = Path(save)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.suffix:
+        path = path.with_suffix("." + DEFAULT_FIGURE_FORMAT)
+    fig.savefig(path, dpi=150)
+
+
 def plot_profile(signal: np.ndarray, title: str = "", save: Path = None,
                  xlabel: str = "position (bp)", ylabel: str = "signal"):
     """Plot a 1-D signal profile and return the matplotlib Figure."""
@@ -27,8 +43,7 @@ def plot_profile(signal: np.ndarray, title: str = "", save: Path = None,
     ax.set_title(title)
     fig.tight_layout()
     if save:
-        save.parent.mkdir(parents=True, exist_ok=True)
-        fig.savefig(save, dpi=150)
+        _save_path(fig, save)
     return fig
 
 
@@ -48,8 +63,7 @@ def plot_matrix_heatmap(matrix: np.ndarray, title: str = "", save: Path = None,
     ax.set_xlabel(xlabel)
     ax.images[0].set_cmap(cmap)
     if save:
-        Path(save).parent.mkdir(parents=True,exist_ok=True)
-        fig.savefig(save,dpi=150)
+        _save_path(fig, save)
     return fig
 
 
@@ -102,7 +116,10 @@ def run_viz(args) -> int:
     from easyepi._plots import selected_formats, save_figure
     formats = selected_formats(args)
     if not formats:
-        raise ValueError("Specify --figure-format to export, or call easyepi.plot_profile to obtain a Figure")
+        # Only reachable with --no-figures: `viz` exists to draw, so declining to
+        # draw is a contradiction the user should hear about, not a silent no-op.
+        raise ValueError("viz writes figures only; drop --no-figures "
+                         "(or call easyepi.plot_profile to get a Figure back)")
     fig = plot_profile(sig, title="Easyepi input signal profile", xlabel="region order")
     save_figure(fig, out, "profile", formats=formats)
     print(f"[easyepi] visualization written to {out}")
