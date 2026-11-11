@@ -225,21 +225,46 @@ def tmm_factors(counts: np.ndarray, logratio_trim: float = 0.3,
 # 4. Negative-binomial Wald test
 # ---------------------------------------------------------------------------
 def _nb_dispersion(norm_counts: np.ndarray, group_a: np.ndarray) -> float:
-    """Pearson moment estimate of a common dispersion, as DESeq2/edgeR do.
+    """Method-of-moments estimate of a common dispersion from within-group residuals.
 
-    ``norm_counts`` is (features, samples), so samples are selected on axis 1.
+    ``norm_counts`` is (features, samples). Overdispersion is the extra-Poisson
+    variance among **replicates of the same condition**, estimated per feature and
+    pooled across features; the variance between features is irrelevant to it and
+    using that (as an earlier version did) gave an estimate two orders of magnitude
+    too large on data whose true dispersion was known.
     """
-    mean_a = norm_counts[:, group_a].mean(axis=1)
-    mean_b = norm_counts[:, ~group_a].mean(axis=1)
-    grand = np.concatenate([mean_a, mean_b])
-    grand = grand[grand > 0]
-    if grand.size < 2:
+    counts = np.asarray(norm_counts, dtype=float)
+    group_a = np.asarray(group_a, dtype=bool)
+    alphas: list[float] = []
+
+    for mask in (group_a, ~group_a):
+        block = counts[:, mask]
+        n = block.shape[1]
+        if n < 2:
+            # a single replicate carries no residual information
+            continue
+        mean_c = block.mean(axis=1)
+        # per-feature residual variance within this condition
+        resid = block - mean_c[:, None]
+        s2 = (resid ** 2).sum(axis=1) / (n - 1)
+        usable = (mean_c > 0) & np.isfinite(mean_c) & np.isfinite(s2)
+        if not usable.any():
+            continue
+        mu = mean_c[usable]
+        # method of moments: var = mu + alpha * mu^2  ->  alpha = (s2 - mu) / mu^2
+        alpha_c = np.maximum(s2[usable] - mu, 0.0) / (mu ** 2)
+        alphas.extend(alpha_c.tolist())
+
+    if not alphas:
         return 0.0
-    var = np.var(grand, ddof=1)
-    mu = grand.mean()
-    # method-of-moments: Var = mu + alpha * mu^2
-    alpha = max((var - mu) / (mu * mu), 0.0) if mu else 0.0
-    return float(min(alpha, 10.0))
+
+    alpha = float(np.mean(alphas))
+    # Shrink toward zero: with three replicates per group a moment estimator is
+    # noisy, and over-estimating the dispersion hides real differences, which is the
+    # failure that matters for a peak table.
+    n_rep = int(min(max(group_a.sum(), 1), max((~group_a).sum(), 1)))
+    alpha *= n_rep / (n_rep + 1.0)
+    return float(min(max(alpha, 0.0), 10.0))
 
 
 def nb_wald_test(counts: np.ndarray, group_a: np.ndarray,
@@ -308,6 +333,26 @@ def bh_adjust(pvalues: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
+def _bam_peak_separator(text: str) -> int | None:
+    """Index of the colon that separates a BAM path from a peak path.
+
+    A plain ``rsplit(":", 1)`` splits ``C:\\data\\a.bam`` into ``C`` and
+    ``\\data\\a.bam``, and ``https://host/a.bam`` into the scheme and the rest. Both
+    are legitimate inputs on Windows and for remote files.
+
+    The separator is taken as the first colon whose left-hand side already ends in a
+    BAM extension. ``None`` means the entry named only a BAM.
+    """
+    bam_suffixes = (".bam", ".cram", ".sam")
+    lowered = text.lower()
+    for i, ch in enumerate(text):
+        if ch != ":":
+            continue
+        if lowered[:i].endswith(bam_suffixes):
+            return i
+    return None
+
+
 def parse_peak_specs(items, bam_dir=None, peak_dir=None,
                      bam_exts=(".bam",), peak_exts=(".narrowPeak", ".broadPeak",
                                                    ".bed", ".bed.gz")):
@@ -359,8 +404,12 @@ def parse_peak_specs(items, bam_dir=None, peak_dir=None,
             rest = rest.strip()
             if not name:
                 raise ValueError(f"malformed --peaks entry {entry!r}")
-            if ":" in rest:
-                bam, peak = rest.rsplit(":", 1)
+            # Splitting on ":" cannot distinguish the BAM:PEAK separator from a
+            # Windows drive letter (C:\\data\\a.bam) or a URL scheme, so the
+            # separator is located only where a complete BAM path precedes it.
+            split_at = _bam_peak_separator(rest)
+            if split_at is not None:
+                bam, peak = rest[:split_at], rest[split_at + 1:]
                 bam, peak = bam.strip(), peak.strip()
                 if not Path(bam).exists():
                     raise FileNotFoundError(f"sample {name}: BAM not found: {bam}")

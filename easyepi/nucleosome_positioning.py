@@ -202,28 +202,35 @@ def spacing_summary(calls: Sequence[dict[str, Any]]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 def fragments_from_bam(bam_path: str | Path, chrom: str, start: int, end: int,
                        max_fragments: int = 2_000_000,
-                       min_mapq: int = 30) -> tuple[np.ndarray, bool]:
-    """Collect fragment (dyad) intervals overlapping a region.
+                       min_mapq: int = 30
+                       ) -> tuple[np.ndarray, bool, dict]:
+    """Fragment midpoints and lengths overlapping a region.
 
-    Each record contributes its midpoint and length. Forward reads use
-    ``[start, end)``; reads on the minus strand are placed by ``end``, because a
-    reverse alignment's ``start`` is the right edge in reference coordinates.
-    Paired records are used once (first-in-pair) to avoid double counting.
-    Unmapped, secondary, supplementary and duplicate alignments are skipped, as
-    are alignments below ``min_mapq``.
+    For a proper pair the fragment is the **template**, so its length is
+    ``abs(template_length)`` and its midpoint is the midpoint of the template -- the
+    dyad. Using one mate's ``reference_end - reference_start`` instead (as an earlier
+    version did) yields the read length: 36 bp on a library whose median insert is
+    112 bp, which then fails every plausible nucleosome length filter.
+
+    A record without a template (single-end, or a pair the aligner could not resolve)
+    falls back to its own span; the caller is told via the returned ``paired`` flag.
+
+    Returns ``(fragments, paired, info)``. ``info`` carries ``records_read`` and
+    ``truncated`` so a capped read is visible rather than silent.
     """
     from easyepi.core.io import _require
     pysam = _require("pysam", "pip install 'easyepi[bam]'")
 
-    buf_m: list[int] = []
-    buf_l: list[int] = []
+    mids: list[int] = []
+    lengths: list[int] = []
     paired_records = 0
     total_records = 0
+
     with pysam.AlignmentFile(str(bam_path), "rb") as bam:
         if chrom not in bam.references:
-            available = list(bam.references[:5])
             raise ValueError(
-                f"chromosome '{chrom}' absent from {bam_path} (has e.g. {available})")
+                f"chromosome '{chrom}' absent from {bam_path} "
+                f"(has e.g. {list(bam.references[:5])})")
         for rec in bam.fetch(chrom, int(start), int(end)):
             if rec.is_unmapped or rec.is_secondary or rec.is_supplementary:
                 continue
@@ -234,23 +241,40 @@ def fragments_from_bam(bam_path: str | Path, chrom: str, start: int, end: int,
             total_records += 1
             if rec.is_paired:
                 paired_records += 1
+                # one fragment per pair: keep read 1
                 if not rec.is_read1:
                     continue
-            f_start = int(rec.reference_start)
-            f_end = int(rec.reference_end) if rec.reference_end is not None else f_start
-            if f_end <= f_start:
+
+            template = int(rec.template_length or 0)
+            if template > 0:
+                # this read is the leftmost mate
+                frag_start = int(rec.reference_start)
+                frag_end = frag_start + template
+            elif template < 0:
+                # this read is the rightmost mate: the template ends at this read's end
+                frag_end = int(rec.reference_end if rec.reference_end is not None
+                               else rec.reference_start)
+                frag_start = frag_end + template
+            else:
+                # no template information (single-end, or an unresolved pair)
+                frag_start = int(rec.reference_start)
+                frag_end = int(rec.reference_end) if rec.reference_end is not None else frag_start
+            if frag_end <= frag_start:
                 continue
-            buf_m.append((f_start + f_end) // 2)
-            buf_l.append(f_end - f_start)
-            if len(buf_m) >= max_fragments:
+            mids.append((frag_start + frag_end) // 2)
+            lengths.append(frag_end - frag_start)
+            if len(mids) >= max_fragments:
                 break
-    # A single-end library has no fragment span, so the dyad is unknowable.
+
     paired = total_records > 0 and paired_records > 0
-    if not buf_m:
-        return np.empty((0, 2), dtype=np.int64), paired
-    mids = np.asarray(buf_m, dtype=np.int64)
-    lengths = np.asarray(buf_l, dtype=np.int64)
-    return np.column_stack([mids, lengths]), paired
+    info = {"records_read": total_records,
+            "truncated": len(mids) >= max_fragments,
+            "max_fragments": int(max_fragments)}
+    if not mids:
+        return np.empty((0, 2), dtype=np.int64), paired, info
+    out = np.column_stack([np.asarray(mids, dtype=np.int64),
+                           np.asarray(lengths, dtype=np.int64)])
+    return out, paired, info
 
 
 def bam_to_dyad_density(bam_path: str | Path, chrom: str, start: int, end: int,
@@ -274,8 +298,9 @@ def bam_to_dyad_density(bam_path: str | Path, chrom: str, start: int, end: int,
     if max_length <= min_length:
         raise ValueError("max_length must exceed min_length")
 
-    frags, paired = fragments_from_bam(bam_path, chrom, start, end,
-                                       max_fragments=max_fragments, min_mapq=min_mapq)
+    frags, paired, frag_info = fragments_from_bam(
+        bam_path, chrom, start, end,
+        max_fragments=max_fragments, min_mapq=min_mapq)
     if not paired:
         raise ValueError(
             "nucleosome positioning needs paired-end fragments: a single-end read "
@@ -287,6 +312,8 @@ def bam_to_dyad_density(bam_path: str | Path, chrom: str, start: int, end: int,
     if frags.size == 0:
         return {"density": density, "n_fragments": 0, "n_used": 0,
                 "n_bins": n_bins, "bin_size": int(bin_size),
+                "truncated": bool(frag_info["truncated"]),
+                "records_read": int(frag_info["records_read"]),
                 "fragment_length_median": None}
 
     mids, lengths = frags[:, 0], frags[:, 1]
@@ -298,6 +325,8 @@ def bam_to_dyad_density(bam_path: str | Path, chrom: str, start: int, end: int,
     return {"density": density, "n_fragments": int(frags.shape[0]),
             "n_used": int(used.size), "n_bins": n_bins,
             "bin_size": int(bin_size),
+            "truncated": bool(frag_info["truncated"]),
+            "records_read": int(frag_info["records_read"]),
             "fragment_length_median": int(np.median(lengths)) if lengths.size else None}
 
 
@@ -380,6 +409,10 @@ def run_positioning(args) -> int:
             title=f"Nucleosome dyad density, {report['region']}",
             save=str(out / "nucleosome_positions"), formats=list(formats))
 
+    if track.get("truncated"):
+        print(f"[easyepi] WARNING: fragment cap reached after {track['n_used']} of "
+              f"{track['records_read']} records; the dyad track is incomplete. "
+              f"Raise --max-fragments or narrow the region.")
     print(f"[easyepi] nucleosome-positioning: {track['n_used']} fragments "
           f"(median {track['fragment_length_median']} bp) -> {len(calls)} calls "
           f"in {report['region']}")

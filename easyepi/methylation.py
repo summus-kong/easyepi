@@ -82,15 +82,43 @@ def read_methylation_table(path: str | Path) -> pd.DataFrame:
     return out
 
 
-def summarize_methylation(frame: pd.DataFrame, min_coverage: float = 0) -> dict[str, float | int]:
-    """Coverage and beta-value summary, optionally filtered by minimum coverage."""
-    keep = _filter_coverage(frame, min_coverage)
-    beta = keep["beta"].to_numpy(float)
-    return {"n_rows": int(len(frame)), "n_retained": int(len(keep)), "n_chromosomes": int(keep["chrom"].nunique()),
-            "mean_beta": float(np.mean(beta)) if len(beta) else float("nan"),
-            "median_beta": float(np.median(beta)) if len(beta) else float("nan"),
-            "mean_coverage": float(keep["coverage"].mean()) if len(keep) else float("nan"),
-            "min_coverage": float(min_coverage)}
+def summarize_methylation(frame: pd.DataFrame, min_coverage: float = 0) -> dict[str, Any]:
+    """Summarise a methylation table.
+
+    The distribution statistics are computed by
+    :func:`easyepi.assay_metrics.beta_distribution`, which is also what the
+    bisulfite-BAM path uses. Delegating rather than re-deriving is deliberate: the two
+    paths previously reported different field sets for the same beta values, so a user
+    who switched from a BAM to a table silently lost the bimodality metrics.
+    """
+    from easyepi.assay_metrics import beta_distribution
+
+    coverage_col = next((c for c in ("coverage", "depth", "total_count", "n")
+                         if c in frame.columns), None)
+    kept = frame
+    if coverage_col and min_coverage:
+        kept = frame[pd.to_numeric(frame[coverage_col], errors="coerce")
+                     .fillna(0) >= float(min_coverage)]
+
+    beta = pd.to_numeric(kept["beta"], errors="coerce").dropna().to_numpy(dtype=float)
+    summary: dict[str, Any] = {
+        "n_rows": int(len(frame)),
+        "n_retained": int(len(kept)),
+        "n_chromosomes": int(kept["chrom"].nunique()) if "chrom" in kept else 0,
+    }
+    summary.update(beta_distribution(beta))
+    # the two paths name the same quantity the same way now; these aliases keep the
+    # older table-oriented keys working for existing reports
+    if "fraction_hypomethylated" in summary:
+        summary["pct_hypomethylated"] = round(summary["fraction_hypomethylated"] * 100.0, 6)
+        summary["pct_hypermethylated"] = round(summary["fraction_hypermethylated"] * 100.0, 6)
+    if coverage_col:
+        summary["mean_coverage"] = float(
+            pd.to_numeric(kept[coverage_col], errors="coerce").mean())
+    else:
+        summary["mean_coverage"] = float("nan")
+    summary["min_coverage"] = float(min_coverage)
+    return summary
 
 
 def profile_methylation(frame: pd.DataFrame, out: str | Path, min_coverage: float = 0) -> dict[str, str | int]:

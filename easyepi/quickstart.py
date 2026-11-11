@@ -38,10 +38,8 @@ ASSAY_HINTS = (
     (r"(?i)(^|[^a-z])(chip|tf)([^a-z]|$)", "ChIP-seq"),
 )
 
-BAM_EXTS = (".bam",)
-BIGWIG_EXTS = (".bw", ".bigWig", ".bigwig")
-PEAK_EXTS = (".narrowPeak", ".broadPeak", ".bed", ".bed.gz")
-METHYL_EXTS = (".cov", ".bedMethyl")
+from easyepi.formats import (BAM_EXTS, BIGWIG_EXTS, METHYL_EXTS, PEAK_EXTS,
+                            stem_of)
 
 GENOME_ALIASES = {
     "hg38": "hg38", "grch38": "hg38", "hg19": "hg19", "grch37": "hg19",

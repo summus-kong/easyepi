@@ -11,10 +11,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Sequence
 
-BAM_EXTS = (".bam",)
-BIGWIG_EXTS = (".bw", ".bigWig", ".bigwig")
-PEAK_EXTS = (".narrowPeak", ".broadPeak", ".bed", ".bed.gz")
-METHYL_EXTS = (".cov", ".bedMethyl", ".tsv", ".csv")
+from easyepi.formats import (BAM_EXTS, BIGWIG_EXTS, METHYL_EXTS, PEAK_EXTS,
+                            stem_of)
 
 
 def split_values(items: Sequence[str] | None) -> list[str]:
