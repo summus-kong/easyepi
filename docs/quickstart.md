@@ -72,4 +72,4 @@ easyepi dmr --group-a ctrl1.bam,ctrl2.bam --group-b trt1.bam,trt2.bam \
 | `no methylation calls found in this BAM` | the BAM has neither `MM`/`ML` nor `XM` |
 | `a working command looks like: ...` | a required argument is missing; the example is copy-pasteable |
 
-Next: [End-to-end examples](../EXAMPLES.md) for a complete sequence per assay.
+Next: [End-to-end examples](EXAMPLES.md) for a complete sequence per assay.
