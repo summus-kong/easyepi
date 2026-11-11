@@ -37,7 +37,7 @@ easyepi annotate --peaks peaks/atac_rep1/atac_rep1_peaks.narrowPeak \
 easyepi footprint --bigwig tracks/atac_rep1.bw \
     --target peaks/atac_rep1/atac_rep1_peaks.narrowPeak \
     --chrom chr1 --start 0 --end 5000000 \
-    --flank 100 --out fp/ --figure-format png
+    --flank 100 --out fp/ --figure-format pdf
 ```
 
 **What to expect.** `qc` FRiP for a good ATAC library is 0.2-0.5 genome-wide. The
@@ -70,7 +70,7 @@ easyepi tf-annotate \
     --peaks peaks/chip_tf/chip_tf_peaks.narrowPeak \
     --genome-fasta genome.fa \
     --motifs jaspar_subset.pfm \
-    --fpr 1e-4 --top 5 --out motifs/ --figure-format png
+    --fpr 1e-4 --top 5 --out motifs/ --figure-format pdf
 ```
 
 **What to expect.** `tf-annotate` needs a `.fai` beside the FASTA. A 4 bp motif
@@ -98,7 +98,7 @@ easyepi histone-states \
 easyepi gene-panel \
     --bigwig tracks/h3k4me3.bw,tracks/h3k27ac.bw,tracks/h3k4me1.bw \
     --gtf genes.gtf --gene AGRN,PLCH2,SKI,TP73 \
-    --flank 3000 --bin-size 50 --out panel/ --figure-format png
+    --flank 3000 --bin-size 50 --out panel/ --figure-format pdf
 ```
 
 **Note on `histone-states`.** It reads bedGraph, not BigWig; convert first
@@ -132,14 +132,14 @@ Occupancy and periodicity from a signal track; dyad calls need paired-end fragme
 ```bash
 # Occupancy and periodicity from the signal
 easyepi bam2bw mnase.bam -o tracks/ --assay mnase --jobs 8
-easyepi nucleosome --bam mnase.bam --out nuc/ --figure-format png
+easyepi nucleosome --bam mnase.bam --out nuc/ --figure-format pdf
 
 # Dyad calling from paired-end fragments (single-end is refused)
 easyepi nucleosome-positioning \
     --bam mnase_paired.bam \
     --chrom chr1 --start 0 --end 2000000 \
     --bin-size 10 --min-length 120 --max-length 200 \
-    --out positioning/ --figure-format png
+    --out positioning/ --figure-format pdf
 ```
 
 **Why single-end is refused.** A single-end read reports one cut site and no
@@ -196,7 +196,7 @@ easyepi differential-peaks \
     --out diff/differential.tsv
 
 # Plot the result
-easyepi viz --regions diff/differential.tsv --out figures/ --figure-format png
+easyepi viz --regions diff/differential.tsv --out figures/ --figure-format pdf
 ```
 
 `--peaks` also accepts the explicit `SAMPLE=BAM:PEAK` form and `SAMPLE=BAM` (peak

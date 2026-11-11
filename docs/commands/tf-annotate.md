@@ -15,7 +15,7 @@ easyepi tf-annotate --peaks p.narrowPeak --genome-fasta g.fa --motifs jaspar.pfm
 | `--background` | optional |  | background-sequences FASTA; enables the Fisher enrichment test and BH correction |
 | `--top` | optional | `5` | hits reported per peak (default 5) |
 | `--out` | required |  |  |
-| `--figure-format` | optional |  | Optional export format; repeat to export multiple formats |
+| `--figure-format` | optional |  | Optional export format; repeat to export multiple formats. Defaults to pdf (vector) when a figure is produced |
 | `--verbose` | optional |  | Write detailed logs/run.log |
 | `--log-file` | optional |  | Detailed file log path |
 | `--quiet` | optional |  | Suppress panel logging |

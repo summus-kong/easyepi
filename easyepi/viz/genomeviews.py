@@ -35,9 +35,11 @@ def _mpl():
 def _finish(fig, save, formats, dpi=300):
     if not save:
         return fig
+    from easyepi._plots import DEFAULT_FIGURE_FORMAT
     from easyepi.pubfig import finalize_figure
     return finalize_figure(fig, save,
-                           formats=["png"] if formats is None else list(formats),
+                           formats=[DEFAULT_FIGURE_FORMAT] if formats is None
+                           else list(formats),
                            dpi=dpi)
 
 

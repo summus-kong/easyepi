@@ -49,7 +49,7 @@ easyepi annotate --peaks peaks/sample/sample_peaks.narrowPeak \
 
 ```bash
 easyepi gene-panel --bigwig tracks/sample.bw --gtf genes.gtf \
-    --gene AGRN,TP73 --out panel/ --figure-format png
+    --gene AGRN,TP73 --out panel/ --figure-format pdf
 ```
 
 Figures are only written when `--figure-format` is given.

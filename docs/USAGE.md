@@ -254,7 +254,7 @@ and no footprint is computed here.
 easyepi nucleosome-positioning --bam mnase.paired.bam \
     --chrom chr1 --start 0 --end 200000 \
     --bin-size 10 --min-length 120 --max-length 200 \
-    --out results/positioning --figure-format png
+    --out results/positioning --figure-format pdf
 ```
 
 Positions are called from the **fragment dyad density**: each fragment contributes
@@ -287,7 +287,7 @@ easyepi gene-panel \
   --gtf gencode.annotation.gtf.gz \
   --gene AGRN,PLCH2,SKI,TP73 \
   --flank 3000 --bin-size 50 \
-  --out results/panel --figure-format png
+  --out results/panel --figure-format pdf
 ```
 
 Both `--bigwig` and `--gene` accept comma-separated values, and the flags may still be repeated.

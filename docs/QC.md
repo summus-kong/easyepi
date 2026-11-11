@@ -26,7 +26,7 @@ All commands accept the same QC flags:
 --blacklist BED                   enables blacklist_fraction
 --qc-thresholds JSON              override warn thresholds
 --max-reads N                     cap reads inspected per metric (default 200000)
---figure-format png|pdf|svg       write figures
+--figure-format pdf|svg|png       write figures (pdf is the default)
 ```
 
 Assay names are normalised, so `ChIP`, `chip`, `ChIP-seq`, `CUT&Tag`, `CUT&RUN`,

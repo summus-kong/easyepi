@@ -15,6 +15,8 @@ from typing import List, Optional, Sequence
 
 import numpy as np
 
+from easyepi._plots import DEFAULT_FIGURE_FORMAT
+
 
 def extract_profiles(signal: np.ndarray, sites: Sequence[int], center: int = 0,
                      flank: int = 100) -> np.ndarray:
@@ -232,7 +234,7 @@ def fig_footprint(profile: dict, title: str = "TF footprint", save: Optional[str
     ax.set_ylabel("accessibility / cut")
     ax.legend(frameon=False, fontsize=6)
     if save:
-        return finalize_figure(fig, save, formats=["png"] if formats is None else formats, dpi=300)
+        return finalize_figure(fig, save, formats=[DEFAULT_FIGURE_FORMAT] if formats is None else formats, dpi=300)
     return fig
 
 
@@ -272,7 +274,7 @@ def fig_nucleosome_positions(density, calls, bin_size: int = 10, region: str = "
         ax.spines[spine].set_visible(False)
     fig.tight_layout()
     if save:
-        return finalize_figure(fig, save, formats=["png"] if formats is None else formats,
+        return finalize_figure(fig, save, formats=[DEFAULT_FIGURE_FORMAT] if formats is None else formats,
                                dpi=300)
     return fig
 
@@ -308,7 +310,7 @@ def fig_tf_annotation(summary: Sequence[dict], n_peaks: int,
     ax.set_title(title, fontsize=8)
     fig.tight_layout()
     if save:
-        return finalize_figure(fig, save, formats=["png"] if formats is None else formats, dpi=300)
+        return finalize_figure(fig, save, formats=[DEFAULT_FIGURE_FORMAT] if formats is None else formats, dpi=300)
     return fig
 
 

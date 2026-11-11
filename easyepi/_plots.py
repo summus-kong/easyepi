@@ -8,15 +8,33 @@ from pathlib import Path
 from typing import Any
 
 
+#: The format every figure is written in unless the caller asks for another one.
+#: PDF is a vector format, so a figure stays sharp at any zoom and can be placed
+#: in a manuscript without re-exporting; PNG was the old default and is raster, so
+#: text and thin lines degraded as soon as a reader zoomed in. This is the single
+#: place the default lives: every plotting entry point reads it from here, so
+#: changing it changes all of them at once.
+DEFAULT_FIGURE_FORMAT = "pdf"
+
+#: Accepted --figure-format values. Raster options stay available because a
+#: raster copy is sometimes wanted for a slide or a web page.
+FIGURE_FORMATS = ("pdf", "svg", "png", "tiff", "jpg")
+
+
 def _mpl():
     import matplotlib.pyplot as plt
     return plt
 
 
 def save_figure(fig: Any, fig_dir: str | Path, stem: str,
-                formats: tuple[str, ...] | list[str] = ("png",),
+                formats: tuple[str, ...] | list[str] = (DEFAULT_FIGURE_FORMAT,),
                 dpi: int = 300) -> list[str]:
-    """Export a Figure in the explicitly selected formats and return written paths."""
+    """Export a Figure in the selected formats and return written paths.
+
+    ``formats`` defaults to :data:`DEFAULT_FIGURE_FORMAT` (PDF). A vector target
+    carries no pixel grid, so ``dpi`` only affects raster outputs in the list;
+    passing it is harmless and keeps one call signature for every format.
+    """
     fig_dir = Path(fig_dir)
     fig_dir.mkdir(parents=True, exist_ok=True)
     allowed = {"png", "svg", "pdf", "tiff", "jpg", "jpeg"}
@@ -32,7 +50,7 @@ def save_figure(fig: Any, fig_dir: str | Path, stem: str,
 
 
 def _save(fig: Any, fig_dir: Path, stem: str,
-          formats: tuple[str, ...] = ("png",)) -> list[str]:
+          formats: tuple[str, ...] = (DEFAULT_FIGURE_FORMAT,)) -> list[str]:
     """Internal alias for save_figure."""
     return save_figure(fig, fig_dir, stem, formats=formats)
 
@@ -51,9 +69,11 @@ def figure_dir(out: str | Path) -> Path:
 def add_figure_args(parser) -> None:
     """Add optional figure export formats; no files are exported by default."""
     parser.add_argument("--figure-format", action="append", dest="figure_formats",
-                        choices=("png", "svg", "pdf", "tiff", "jpg"),
+                        choices=FIGURE_FORMATS,
                         default=None,
-                        help="Optional export format; repeat to export multiple formats")
+                        help="Optional export format; repeat to export multiple "
+                             f"formats. Defaults to {DEFAULT_FIGURE_FORMAT} (vector) "
+                             "when a figure is produced")
 
 
 def selected_formats(args) -> tuple[str, ...]:
@@ -108,7 +128,7 @@ def plot_volcano(frame, title: str = "Differential volcano"):
 
 
 def _volcano(frame, fig_dir: Path, stem: str = "volcano",
-             formats: tuple[str, ...] = ("png",)) -> list[str]:
+             formats: tuple[str, ...] = (DEFAULT_FIGURE_FORMAT,)) -> list[str]:
     fig = plot_volcano(frame)
     return [] if fig is None else _save(fig, fig_dir, stem, formats=formats)
 
@@ -137,7 +157,7 @@ def plot_heatmap(frame, title: str = ""):
 
 
 def _heatmap(frame, fig_dir: Path, stem: str = "sample_heatmap",
-             formats: tuple[str, ...] = ("png",)) -> list[str]:
+             formats: tuple[str, ...] = (DEFAULT_FIGURE_FORMAT,)) -> list[str]:
     fig = plot_heatmap(frame)
     return [] if fig is None else _save(fig, fig_dir, stem, formats=formats)
 
@@ -159,7 +179,7 @@ def plot_bar(frame, title: str = ""):
 
 
 def _bar(frame, fig_dir: Path, stem: str = "metrics",
-         formats: tuple[str, ...] = ("png",)) -> list[str]:
+         formats: tuple[str, ...] = (DEFAULT_FIGURE_FORMAT,)) -> list[str]:
     fig = plot_bar(frame)
     return [] if fig is None else _save(fig, fig_dir, stem, formats=formats)
 
@@ -178,13 +198,13 @@ def plot_distribution(frame, title: str = ""):
 
 
 def _distribution(frame, fig_dir: Path, stem: str = "distribution",
-                  formats: tuple[str, ...] = ("png",)) -> list[str]:
+                  formats: tuple[str, ...] = (DEFAULT_FIGURE_FORMAT,)) -> list[str]:
     fig = plot_distribution(frame)
     return [] if fig is None else _save(fig, fig_dir, stem, formats=formats)
 
 
 def _motif_json(path: Path, fig_dir: Path,
-                formats: tuple[str, ...] = ("png",)) -> list[str]:
+                formats: tuple[str, ...] = (DEFAULT_FIGURE_FORMAT,)) -> list[str]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except Exception:  # noqa: BLE001
@@ -503,7 +523,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def render_module_figures(module: str, out: str | Path,
-                          formats: tuple[str, ...] | list[str] = ("png",)) -> list[str]:
+                          formats: tuple[str, ...] | list[str] = (DEFAULT_FIGURE_FORMAT,)) -> list[str]:
     """Render requested formats from completed module output tables."""
     if not formats:
         return []

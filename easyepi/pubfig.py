@@ -12,6 +12,8 @@ from typing import List, Optional, Sequence
 
 import numpy as np
 
+from easyepi._plots import DEFAULT_FIGURE_FORMAT
+
 # Nature-style palette (semantic: neutral family, signal family, accent family).
 PALETTE = {
     "blue_main": "#0F4D92",
@@ -55,7 +57,8 @@ def finalize_figure(fig, out_path: str, formats: Optional[List[str]] = None,
                     bbox_inches: str = "tight", close: bool = True) -> List[str]:
     """Tight-layout and export a figure to SVG/PDF/TIFF/PNG.
 
-    ``formats`` defaults to the extension of ``out_path``, else ['pdf','svg','png'].
+    ``formats`` defaults to the extension of ``out_path``, else
+    :data:`easyepi._plots.DEFAULT_FIGURE_FORMAT` (PDF).
     Returns the list of saved paths.
     """
     import os
@@ -63,7 +66,7 @@ def finalize_figure(fig, out_path: str, formats: Optional[List[str]] = None,
     fig.tight_layout(pad=pad)
     base = Path(out_path)
     if formats is None:
-        formats = [base.suffix.lstrip('.') or "png"]
+        formats = [base.suffix.lstrip('.') or DEFAULT_FIGURE_FORMAT]
         base = base.with_suffix("")
     os.makedirs(base.parent, exist_ok=True)
     saved = []

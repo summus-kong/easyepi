@@ -36,7 +36,7 @@ MINIMAL_EXAMPLE: dict[str, str] = {
     "nucleosome-positioning": "easyepi nucleosome-positioning --bam paired.bam "
                               "--chrom chr1 --start 0 --end 1000000 --out np/",
     "gene-panel": "easyepi gene-panel --bigwig a.bw,b.bw --gtf genes.gtf "
-                  "--gene AGRN,TP73 --out panel/ --figure-format png",
+                  "--gene AGRN,TP73 --out panel/ --figure-format pdf",
     "differential-peaks": "easyepi differential-peaks --peaks ctrl1,ctrl2 "
                           "--bam-dir bams --peak-dir peaks --group-a ctrl1 "
                           "--out diff.tsv",
@@ -46,7 +46,7 @@ MINIMAL_EXAMPLE: dict[str, str] = {
     "integrate": "easyepi integrate --gene-bed genes.bed --track S=a.bw --out int/",
     "normalize": "easyepi normalize --matrix counts.tsv --factors f.tsv --out norm.tsv",
     "diff": "easyepi diff --project project.toml --out diff/",
-    "viz": "easyepi viz --regions regions.bed --out viz/ --figure-format png",
+    "viz": "easyepi viz --regions regions.bed --out viz/ --figure-format pdf",
     "washu": "easyepi washu --manifest tracks.tsv --out washu/",
     "init": "easyepi init /data/bams --out project.toml",
     "validate-project": "easyepi validate-project --project project.toml --out v/",

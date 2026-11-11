@@ -7,7 +7,7 @@ questions need two different commands.
 
 ```bash
 easyepi bam2bw mnase.bam -o tracks/ --assay mnase --jobs 8
-easyepi nucleosome --bam mnase.bam --out nuc/ --figure-format png
+easyepi nucleosome --bam mnase.bam --out nuc/ --figure-format pdf
 ```
 
 Reports the fragment-length distribution and the periodic spacing of the dyad signal.
@@ -18,7 +18,7 @@ Reports the fragment-length distribution and the periodic spacing of the dyad si
 easyepi nucleosome-positioning --bam mnase_paired.bam \
     --chrom chr1 --start 0 --end 2000000 \
     --bin-size 10 --min-length 120 --max-length 200 \
-    --out positioning/ --figure-format png
+    --out positioning/ --figure-format pdf
 ```
 
 Calls come from the **fragment midpoint** (the dyad), with a robust
