@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import pytest
 
+from pathlib import Path
+
 pytest.importorskip("matplotlib")
 
 import matplotlib
@@ -76,31 +78,29 @@ def test_finalize_figure_without_extension_defaults_to_pdf(tmp_path):
 def test_no_flag_writes_a_pdf_and_no_figures_skips_it(tmp_path):
     """The CLI default exports; `--no-figures` is the only way to skip writing.
 
-    Asserted through a real command rather than `selected_formats` alone, because the
-    bug this replaced was invisible: the flag plumbing was fine, but the render path
-    raised inside a best-effort wrapper, so a run looked successful and wrote nothing.
+    Driven through `render_module_figures` with a module that needs no optional
+    dependency (`motif_enrichment` needs biopython, which the CI test job does not
+    install). What is under test is the figure plumbing, not any one analysis: the
+    bug this pins was that the flag plumbing was fine while the render path raised
+    inside a best-effort wrapper, so a run looked successful and wrote nothing.
     """
     import json
-    from easyepi.universal.motif_enrichment import main
+    from easyepi._plots import render_module_figures
 
-    def run(extra, name):
+    def run(formats, name):
         work = tmp_path / name
         work.mkdir()
-        tgt, bg, pwm = work / "t.fa", work / "b.fa", work / "m.pfm"
-        tgt.write_text(">t1\nAAAAAA\n>t2\nAAAAAA\n")
-        bg.write_text(">b1\nCCCCCC\n>b2\nCCCCCC\n")
-        pwm.write_text("100 100 100 100 100 100\n0 0 0 0 0 0\n0 0 0 0 0 0\n0 0 0 0 0 0\n")
-        out = work / "out"
-        rc = main(["--target", str(tgt), "--background", str(bg), "--pwm", str(pwm),
-                   "--out", str(out), "--fpr", "0.01", *extra])
-        assert rc == 0
-        figs = sorted(p.name for p in (out / "figures").glob("*")) \
-            if (out / "figures").exists() else []
-        return figs
+        # A qc_metrics table is enough: the QC branch renders a bar chart from it.
+        (work / "qc_metrics.tsv").write_text(
+            "sample_id\tmetric\nS1\t0.5\nS2\t0.7\n", encoding="utf-8")
+        made = render_module_figures("qc_metrics", work, formats)
+        return sorted(Path(m).name for m in made)
 
-    assert run([], "default") == ["motif_enrichment.pdf"]
-    assert run(["--no-figures"], "off") == []
-    assert run(["--figure-format", "png"], "png") == ["motif_enrichment.png"]
+    assert run(("pdf",), "default") == ["qc_metrics.pdf"]
+    assert run((), "off") == []
+    assert run(("png",), "png") == ["qc_metrics.png"]
+    # and the file really is what the extension says
+    assert (tmp_path / "default" / "figures" / "qc_metrics.pdf").read_bytes()[:4] == b"%PDF"
 
 
 def test_matrix_input_does_not_break_a_bar_figure(tmp_path):
