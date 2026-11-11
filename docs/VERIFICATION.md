@@ -71,7 +71,7 @@ already present on the host; the JASPAR subset is cached after the first run).
 | Check | Result |
 | --- | --- |
 | Full suite on Linux (`pytest tests -q`) | **235 passed**, 0 failed |
-| CLI surface | 24 subcommands; `nucleosome-positioning` added |
+| CLI surface | every subcommand's `--help` builds; `nucleosome-positioning` added |
 | Previously unimplemented analysis | `mnase positioning` now implemented as `nucleosome-positioning` |
 | Single-end refusal on a real ENCODE ChIP BAM | Refused with an actionable message (no dyad from single-end reads) |
 | New figures rendered and inspected | MA plot, peak-set overlap, TSS heatmap, locus track, dyad-density track |

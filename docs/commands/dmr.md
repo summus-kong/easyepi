@@ -20,7 +20,7 @@ easyepi dmr --group-a ctrl.bam --group-b trt.bam --out dmr/regions.tsv
 | `--alpha` | optional | `0.05` | FDR threshold for significant sites and regions |
 | `--max-gap` | optional | `100` | merge significant sites at most this many bp apart |
 | `--min-sites` | optional | `1` | minimum significant sites per reported region |
-| `--out` | required |  | DMR table (a .sites.tsv and .json are written beside it) |
+| `--out` | required |  | output DMR table file path (.sites.tsv and .json are written beside it) |
 | `--verbose` | optional |  | Write detailed logs/run.log |
 | `--log-file` | optional |  | Detailed file log path |
 | `--quiet` | optional |  | Suppress panel logging |

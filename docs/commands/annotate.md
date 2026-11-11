@@ -13,7 +13,7 @@ easyepi annotate --peaks peaks/sample/sample_peaks.narrowPeak --gtf genes.gtf --
 | `--backend` | optional | `native` |  |
 | `--mode` | optional | `midpoint` |  |
 | `--min-overlap` | optional |  |  |
-| `--out` | required |  |  |
+| `--out` | required |  | output directory for annotation tables |
 | `--figure-format` | optional |  | Export format for figures; repeat to export several. Default: pdf (vector) |
 | `--no-figures` | optional |  | Do not write figures; only tables and JSON are produced |
 | `--verbose` | optional |  | Write detailed logs/run.log |

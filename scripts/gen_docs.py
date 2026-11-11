@@ -17,6 +17,7 @@ Run from the repository root: ``python scripts/gen_docs.py``
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -79,6 +80,9 @@ def write_commands_index(parser) -> Path:
     lines = [
         "# Commands",
         "",
+        # The count is generated, never typed: a hand-written "28 subcommands"
+        # elsewhere had already drifted from the parser once, and a reader cannot
+        # tell which page is authoritative.
         f"`easyepi` exposes {len(choices)} subcommands. Each one reads files and writes",
         "files; none requires another to have run first.",
         "",
@@ -174,6 +178,27 @@ def write_command_pages(parser) -> list[Path]:
     return written
 
 
+#: Prose pages may name a number of subcommands. Checked so a stale count fails the
+#: build instead of sitting in the navigation beside the generated page.
+COUNT_PATTERN = re.compile(r"\b(\d+)\s+subcommands\b")
+
+
+def check_stale_counts(parser) -> list[str]:
+    """Return complaints about any hand-written subcommand count that is wrong."""
+    expected = len(_subparsers(parser))
+    problems = []
+    for page in sorted(DOCS.rglob("*.md")):
+        text = page.read_text(encoding="utf-8")
+        for lineno, line in enumerate(text.splitlines(), 1):
+            for match in COUNT_PATTERN.finditer(line):
+                claimed = int(match.group(1))
+                if claimed != expected:
+                    problems.append(
+                        f"{page.relative_to(REPO)}:{lineno}: says {claimed} "
+                        f"subcommands, the parser has {expected}")
+    return problems
+
+
 def main() -> int:
     parser = _parser()
     paths = [write_commands_index(parser)]
@@ -182,6 +207,12 @@ def main() -> int:
     for p in paths:
         print("wrote", p.relative_to(REPO))
     print(f"\n{len(paths)} page(s)")
+
+    problems = check_stale_counts(parser)
+    if problems:
+        for problem in problems:
+            print("STALE COUNT:", problem)
+        return 1
     return 0
 
 

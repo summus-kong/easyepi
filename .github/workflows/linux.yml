@@ -5,7 +5,13 @@ name: Linux verification
 # maintenance/verify_linux.py, never the test suite. It is rewritten here around what
 # the package actually provides, and the test suite is the primary check.
 #
-# pyproject extras after this change: core (implicit), bam, bigwig, viz, states, dev.
+# Two jobs, because two different questions are asked:
+#   `test`  - does the code work against the source tree, on each Python version?
+#   `wheel` - does the *published artefact* install and work? An editable install
+#             exercises neither `python -m build` nor the wheel's contents, so a
+#             packaging mistake (a missing subpackage, a bad classifier) could reach
+#             PyPI with every test green. This job is the only one that installs
+#             what a user would actually download.
 
 on:
   push:
@@ -19,6 +25,12 @@ permissions:
 concurrency:
   group: linux-${{ github.ref }}
   cancel-in-progress: true
+
+# Every optional extra the package declares. Listed once here because it is used by
+# both jobs: with a partial set, tests that need the missing extra are skipped
+# instead of run, and a green suite then says less than it appears to.
+env:
+  EXTRAS: "bam,viz,states,activity,motif,dev"
 
 jobs:
   test:
@@ -42,16 +54,18 @@ jobs:
       - name: Install package with every optional extra
         run: |
           python -m pip install --upgrade pip
-          # every extra, so the suite runs with pysam/pyBigWig/matplotlib/hmmlearn
-          # present rather than silently skipping the tests that need them
-          python -m pip install -e ".[bam,viz,states,dev]"
+          # `motif` (biopython) and `activity` (decoupler) are included on purpose.
+          # Without them, test_optional_readers.py and test_release_contract.py skip
+          # rather than fail, and the skip count made a real gap look like a pass.
+          python -m pip install -e ".[${EXTRAS}]"
 
       - name: Report what was actually installed
         # A green run against a different dependency set is not reproducible, so the
         # resolved versions go into the log and the artifact.
         run: |
           python -c "import sys; print('python', sys.version)"
-          python -m pip list --format=freeze | grep -Ei 'numpy|scipy|pandas|matplotlib|pysam|pybigwig|hmmlearn|pytest' || true
+          python -m pip list --format=freeze \
+            | grep -Ei 'numpy|scipy|pandas|matplotlib|pysam|pybigwig|hmmlearn|pytest|biopython|decoupler' || true
 
       - name: Test suite
         env:
@@ -63,9 +77,11 @@ jobs:
           MPLBACKEND: Agg
         run: python maintenance/verify_linux.py
 
-      - name: Check that no test was silently skipped
-        # The suite contains pysam-dependent tests; with the extras installed they
-        # must run. A large skip count means the environment is wrong.
+      - name: No test may be silently skipped
+        # Every extra is installed above, so nothing should skip. This was a warning
+        # while the environment was incomplete; now that it is complete, a skip
+        # means a test guarded on an import that is missing from EXTRAS, which is a
+        # gap in the check rather than a fact about the code. Fail instead.
         env:
           MPLBACKEND: Agg
         run: |
@@ -73,7 +89,9 @@ jobs:
           SKIPPED=$(grep -cE '^SKIPPED' /tmp/pytest_skips.txt || true)
           echo "skipped: ${SKIPPED:-0}"
           if [ "${SKIPPED:-0}" -gt 0 ]; then
-            echo "::warning::${SKIPPED} test(s) skipped; inspect the artifact"
+            echo "::error::${SKIPPED} test(s) skipped; add the missing extra to EXTRAS"
+            grep -E '^SKIPPED' /tmp/pytest_skips.txt
+            exit 1
           fi
 
       - uses: actions/upload-artifact@v4
@@ -82,3 +100,117 @@ jobs:
           name: linux-verification-py${{ matrix.python }}
           path: .verification/linux
           if-no-files-found: warn
+
+  wheel:
+    name: wheel build and clean install
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+
+      - name: Verify the wheel's metadata
+        # `c27cd27` removed a `License :: OSI Approved :: BSD License` classifier that
+        # made every install fail, and nothing in CI would have caught it: the
+        # editable install never reads the metadata this strictly. Validate the
+        # fields that a resolver actually checks.
+        run: |
+          python - <<'PY'
+          import glob, sys, zipfile
+          from email.parser import HeaderParser
+
+          wheels = glob.glob("dist/*.whl")
+          if len(wheels) != 1:
+              sys.exit(f"expected exactly one wheel, found {wheels}")
+
+          with zipfile.ZipFile(wheels[0]) as zf:
+              names = zf.namelist()
+              meta_name = next(n for n in names if n.endswith(".dist-info/METADATA"))
+              meta = HeaderParser().parsestr(zf.read(meta_name).decode("utf-8"))
+
+          problems = []
+          if not meta.get("License-Expression"):
+              # PEP 639: a project that sets `license = "..."` must publish it as an
+              # expression; the legacy free-text `License:` field is not equivalent.
+              problems.append("License-Expression missing (PEP 639)")
+          classifiers = meta.get_all("Classifier") or []
+          legacy = [c for c in classifiers if c.startswith("License ::")]
+          if legacy:
+              # These were deprecated and, combined with a license expression, made
+              # installs fail. They must never come back.
+              problems.append(f"legacy License :: classifiers present: {legacy}")
+          if not any(c.startswith("Programming Language :: Python :: 3.") for c in classifiers):
+              problems.append("no Python 3.x classifier")
+
+          # A packaging exclude that names a removed subpackage silently drops code.
+          import pathlib
+          keep = pathlib.Path("easyepi").is_dir()
+          if not keep:
+              problems.append("easyepi/ missing from the checkout")
+
+          payload = [n for n in names if n.startswith("easyepi/") and n.endswith(".py")]
+          for required in ("easyepi/cli.py", "easyepi/assays.py", "easyepi/_plots.py"):
+              if required not in payload:
+                  problems.append(f"{required} missing from the wheel")
+
+          if problems:
+              print("\n".join(problems))
+              sys.exit(1)
+          print(f"OK: {len(payload)} modules, License-Expression={meta.get('License-Expression')}")
+          PY
+
+      - name: Install the wheel into a clean environment
+        run: |
+          python -m venv /tmp/clean
+          /tmp/clean/bin/python -m pip install --upgrade pip
+          WHEEL=$(ls dist/*.whl)
+          echo "installing ${WHEEL}"
+          # The extras resolve from the wheel's own metadata, which is the point:
+          # this is what a user gets from `pip install easyepi[...]`.
+          /tmp/clean/bin/python -m pip install "${WHEEL}[${EXTRAS}]"
+
+      - name: The installed package works
+        env:
+          MPLBACKEND: Agg
+        # Tests are not packaged (`packages.find` has no tests entry) so the smoke
+        # test is the CLI plus a real command on a real input, run from a directory
+        # that is not the checkout: if anything imports from the source tree instead
+        # of the wheel, it fails here.
+        run: |
+          cd /tmp
+          /tmp/clean/bin/python -c "import easyepi; print('import from', easyepi.__file__)"
+          /tmp/clean/bin/python -m easyepi.cli --version
+          /tmp/clean/bin/python -m easyepi.cli peaks --help > /dev/null
+          printf 'chr1\t0\t100\nchr1\t200\t300\n' > /tmp/peaks.bed
+          /tmp/clean/bin/python -m easyepi.cli peaks /tmp/nonexistent.bam \
+            --out /tmp/should_not_exist 2>&1 | grep -q "input not found"
+
+      - name: Version in the package matches the metadata
+        run: |
+          python - <<'PY'
+          import glob, sys, zipfile, re, tomllib, pathlib
+          version = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"]
+          src = pathlib.Path("easyepi/__init__.py").read_text()
+          m = re.search(r'^__version__\s*=\s*"([^"]+)"', src, re.M)
+          if not m:
+              sys.exit("__version__ not found in easyepi/__init__.py")
+          if m.group(1) != version:
+              sys.exit(f"__version__ {m.group(1)!r} != pyproject version {version!r}")
+          wheel = glob.glob("dist/*.whl")[0]
+          if f"-{version}-" not in wheel:
+              sys.exit(f"wheel filename {wheel} does not carry version {version}")
+          print(f"version {version} consistent across pyproject, __init__ and wheel name")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/

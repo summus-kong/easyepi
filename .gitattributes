@@ -1,0 +1,58 @@
+# Line endings and binary files, stated once.
+#
+# Without this, the repository stores whatever the committing machine used: 154 of
+# the tracked .py files are CRLF because they were committed from Windows, while the
+# Linux analysis host has LF. Comparing a file on the host against a file in the
+# repository then reports "content differs" for every one of them, and the only way
+# to find a real difference is to normalise first -- which is exactly how two files
+# that really were out of sync stayed hidden behind 39 false positives.
+#
+# `text=auto eol=lf` stores LF in the repository and checks out LF on every platform,
+# so a comparison is a comparison. Python does not care, and tools that do (patch,
+# diff, grep) behave consistently.
+
+* text=auto eol=lf
+
+*.py       text eol=lf
+*.md       text eol=lf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+*.toml     text eol=lf
+*.cfg      text eol=lf
+*.ini      text eol=lf
+*.txt      text eol=lf
+*.cff      text eol=lf
+*.sh       text eol=lf
+*.tsv      text eol=lf
+*.bed      text eol=lf
+*.narrowPeak text eol=lf
+*.broadPeak  text eol=lf
+*.bedGraph text eol=lf
+.gitignore     text eol=lf
+.gitattributes text eol=lf
+
+# Windows-only helper scripts keep CRLF so they stay usable there.
+*.ps1      text eol=crlf
+*.bat      text eol=crlf
+*.cmd      text eol=crlf
+
+# Genomic and image binaries: never inspect, never convert.
+*.bam      binary
+*.bai      binary
+*.bw       binary
+*.bigWig   binary
+*.pdf      binary
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.tiff     binary
+*.svg      text eol=lf
+*.gz       binary
+*.tgz      binary
+*.zip      binary
+*.fa       text eol=lf
+*.fasta    text eol=lf
+*.fai      binary
+*.gtf      text eol=lf
+*.gff      text eol=lf
+*.gff3     text eol=lf

@@ -94,12 +94,17 @@ nav:
       - easyepi.errors: api/errors.md
   - Reference:
       - Usage and input contracts: USAGE.md
+      - Python API: PYTHON_API.md
+      - Peak calling modes: PEAK_MODES.md
       - QC thresholds: QC.md
       - Motif methods: MOTIF_BACKENDS.md
       - Method references: REFERENCES.md
       - Verification results: VERIFICATION.md
       - Reliability and limitations: RELIABILITY.md
       - Scope and evidence: INNOVATION.md
+  - Contributing:
+      - Development guide: DEVELOPMENT.md
+      - Releasing: PUBLISHING.md
 
 extra:
   version:

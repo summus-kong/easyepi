@@ -1,7 +1,27 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 - unreleased
 
+- Figures are written as **PDF (vector) by default** and are produced without
+  being asked: a run that should have plotted no longer looks identical to one that
+  did. `--figure-format` still selects png/svg/tiff/jpg, `--no-figures` writes only
+  tables and JSON, and every plotting entry point (`save_figure`, `pubfig`,
+  `motifs.logo`, `viz`) reads one `DEFAULT_FIGURE_FORMAT`.
+- Fixed figures silently disappearing on the motif-enrichment path: `np_log10`
+  returned a bare ndarray and the following `.iloc` calls raised inside the
+  best-effort render wrapper, which logged a warning and produced no file.
+- The assay vocabulary is defined once (`easyepi/assays.py`) and read by `bam2bw`,
+  `peaks`, `qc`, `assay_metrics` and `assay_commands`. `--assay` now accepts 31
+  spellings everywhere instead of two different subsets, and `qc --assay` validates
+  its value instead of silently emitting an empty metric block.
+- Methylation QC reads beta values from the bisulfite BAM (MM/ML or Bismark XM), as
+  the WGBS page always claimed; `qc --assay methylation --bam x.bam` previously
+  reported read flags only.
+- `differential-peaks --peak-dir` finds the per-sample peak layout that `easyepi
+  peaks` writes, as well as the flat layout.
+- Documentation: every one of the 81 `easyepi ...` examples in `docs/` and
+  `README.md` is parsed by the live argparse tree in CI, and the four reference
+  pages that existed but were unreachable from the nav are now published.
 - Added `easyepi tf-annotate`: annotate peaks with transcription factors by scanning
   known PWMs (JASPAR/HOMER/MEME) in peak sequences fetched from an indexed genome
   FASTA. Thresholds come from the PWM score distribution under a binned uniform
@@ -19,10 +39,6 @@
   `skipped_motifs` instead of appearing as "no binding site".
 - Added `easyepi histone-states` and `easyepi differential-peaks` CLI entries for the
   pure-Python ChromHMM and DiffBind equivalents.
-
-## Unreleased (continued)
-
-
 
 - Added `easyepi nucleosome-positioning`: nucleosome calls from paired-end fragment
 
@@ -47,10 +63,6 @@
 - Fixed `overlap_fraction` clipping only one interval end, which reported a
 
   candidate's whole length as shared for a partial overlap.
-
-
-
-## Unreleased (visualisation round)
 
 - Added `easyepi gene-panel`: one column per gene, one row per BigWig, with the
   gene model (exons and strand arrow) underneath. Reads gene bodies and exons from

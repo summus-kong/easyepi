@@ -441,7 +441,7 @@ def build_parser() -> argparse.ArgumentParser:
                       help="folder scanned for *.bam / *.bw / *.bigWig and peak "
                            "files; each sample becomes <stem>. Saves listing every "
                            "file by hand")
-    p_qc.add_argument("--out", required=True, help="output report path")
+    p_qc.add_argument("--out", required=True, help="output JSON report file path")
     # Assay is optional: when omitted the command stays a generic BAM summary.
     # The choices are listed so `--help` shows them and argparse rejects a typo,
     # which is what used to produce a report with an empty assay_qc.
@@ -495,7 +495,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_dm.add_argument("--min-sites", type=int, default=1, dest="min_sites",
                       help="minimum significant sites per reported region")
     p_dm.add_argument("--out", required=True,
-                      help="DMR table (a .sites.tsv and .json are written beside it)")
+                      help="output DMR table file path (.sites.tsv and .json are written beside it)")
     p_dm.set_defaults(func=_cmd_dmr)
 
     p_norm = sub.add_parser("normalize", help="signal / count normalization")
@@ -504,7 +504,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_norm.add_argument("--method", choices=["cpm","spikein","rpgc"], default="cpm")
     p_norm.add_argument("--effective-genome-size", type=int, default=0)
     p_norm.add_argument("--fragment-length", type=float)
-    p_norm.add_argument("--out", required=True)
+    p_norm.add_argument("--out", required=True,
+                     help="output directory for the normalised tables")
     add_figure_args(p_norm)
     p_norm.set_defaults(func=_cmd_normalize)
 
@@ -546,7 +547,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_an.add_argument("--backend", default="native", choices=["native", "pybedtools", "pyranges"])
     p_an.add_argument("--mode", default="midpoint", choices=["midpoint", "overlap"])
     p_an.add_argument("--min-overlap", type=float, default=0.0)
-    p_an.add_argument("--out", required=True)
+    p_an.add_argument("--out", required=True,
+                   help="output directory for annotation tables")
     add_figure_args(p_an)
     p_an.set_defaults(func=_cmd_annotate)
 
@@ -560,7 +562,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_mo.add_argument("--backend", default="auto", choices=["auto", "native", "homer"],
                       help="auto/homer require HOMER; native is a legacy exploratory method")
     p_mo.add_argument("--homer-dir", default=None, help="path to HOMER share/homer dir (migrated install)")
-    p_mo.add_argument("--out", required=True)
+    p_mo.add_argument("--out", required=True,
+                   help="output directory for motif tables and figures")
     add_figure_args(p_mo)
     p_mo.set_defaults(func=_cmd_motifs)
 
@@ -597,13 +600,15 @@ def build_parser() -> argparse.ArgumentParser:
                            "enrichment test and BH correction")
     p_tf.add_argument("--top", type=int, default=5,
                       help="hits reported per peak (default 5)")
-    p_tf.add_argument("--out", required=True)
+    p_tf.add_argument("--out", required=True,
+                   help="output directory for TF annotation tables")
     add_figure_args(p_tf)
     p_tf.set_defaults(func=_cmd_tf_annotate)
 
     p_nuc = sub.add_parser("nucleosome", help="nucleosome occupancy / positioning")
     p_nuc.add_argument("--bam", action="append")
-    p_nuc.add_argument("--out", required=True)
+    p_nuc.add_argument("--out", required=True,
+                    help="output directory for nucleosome results")
     add_figure_args(p_nuc)
     p_nuc.set_defaults(func=_cmd_nucleosome)
 
@@ -637,7 +642,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_np.add_argument("--max-fragments", type=int, default=2000000,
                       dest="max_fragments")
     p_np.add_argument("--min-mapq", type=int, default=30, dest="min_mapq")
-    p_np.add_argument("--out", required=True)
+    p_np.add_argument("--out", required=True,
+                   help="output directory for positioning results")
     add_figure_args(p_np)
     p_np.set_defaults(func=_cmd_nucleosome_positioning)
 
@@ -666,7 +672,8 @@ def build_parser() -> argparse.ArgumentParser:
                       help="scale each panel separately instead of one y range "
                            "per track row")
     p_gp.add_argument("--title", default=None)
-    p_gp.add_argument("--out", required=True)
+    p_gp.add_argument("--out", required=True,
+                   help="output directory for panel tables and figures")
     add_figure_args(p_gp)
     p_gp.set_defaults(func=_cmd_gene_panel)
 
@@ -693,7 +700,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_dp.add_argument("--min-overlap", type=int, default=1, dest="min_overlap",
                       help="bp overlap needed to merge peaks into one region (default 1)")
     p_dp.add_argument("--min-mapq", type=int, default=30, dest="min_mapq")
-    p_dp.add_argument("--out", required=True, help="output TSV")
+    p_dp.add_argument("--out", required=True, help="output TSV file path")
     p_dp.set_defaults(func=_cmd_diffpeaks)
 
     p_hs = sub.add_parser(
@@ -717,7 +724,8 @@ def build_parser() -> argparse.ArgumentParser:
                       help="random HMM restarts; the best log-likelihood wins "
                            "(default 8)")
     p_hs.add_argument("--seed", type=int, default=0)
-    p_hs.add_argument("--out", required=True)
+    p_hs.add_argument("--out", required=True,
+                   help="output directory for state tables and figures")
     p_hs.set_defaults(func=_cmd_histone_states)
 
     p_df = sub.add_parser("diff", help="design-aware differential analysis")
@@ -727,13 +735,15 @@ def build_parser() -> argparse.ArgumentParser:
                       help="independent-group test (default: mannwhitney); wilcoxon requires --pair")
     p_df.add_argument("--pair", default=None, help="design column containing paired subject IDs")
     p_df.add_argument("--equal-var", action="store_true", help="assume equal variance for t-test")
-    p_df.add_argument("--out", required=True)
+    p_df.add_argument("--out", required=True,
+                   help="output TSV for the comparison table")
     add_figure_args(p_df)
     p_df.set_defaults(func=_cmd_diff)
 
     p_vz = sub.add_parser("viz", help="visualization")
     p_vz.add_argument("--regions", required=True)
-    p_vz.add_argument("--out", required=True)
+    p_vz.add_argument("--out", required=True,
+                   help="output directory for figures")
     add_figure_args(p_vz)
     p_vz.set_defaults(func=_cmd_viz)
 

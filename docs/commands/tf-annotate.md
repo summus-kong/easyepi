@@ -14,7 +14,7 @@ easyepi tf-annotate --peaks p.narrowPeak --genome-fasta g.fa --motifs jaspar.pfm
 | `--fpr` | optional | `0.0001` | per-motif per-sequence false-positive rate used for the exact threshold (default 1e-4) |
 | `--background` | optional |  | background-sequences FASTA; enables the Fisher enrichment test and BH correction |
 | `--top` | optional | `5` | hits reported per peak (default 5) |
-| `--out` | required |  |  |
+| `--out` | required |  | output directory for TF annotation tables |
 | `--figure-format` | optional |  | Export format for figures; repeat to export several. Default: pdf (vector) |
 | `--no-figures` | optional |  | Do not write figures; only tables and JSON are produced |
 | `--verbose` | optional |  | Write detailed logs/run.log |

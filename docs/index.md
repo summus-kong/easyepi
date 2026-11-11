@@ -27,7 +27,8 @@ easyepi peaks sample.bam -o peaks/ --assay atac
 things this suite produces, so a study that starts from alignments never has to
 assemble a second toolkit.
 
-**One tool, one job.** 28 subcommands, each reading files and writing files. Nothing
+**One tool, one job.** One subcommand per analysis step, each reading files and
+writing files. Nothing
 is hidden behind a "run everything" wrapper, and a partial failure is reported per
 step.
 

@@ -5,7 +5,7 @@ optional tools provide peak calling, chromatin states and regulator activity.
 See the reliability documentation for exploratory method limitations.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # --- Core data model -------------------------------------------------------
 from easyepi.core.models import (  # noqa: F401

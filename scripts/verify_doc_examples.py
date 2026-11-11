@@ -51,6 +51,115 @@ def logical_lines(text: str) -> list[tuple[int, str]]:
     return out
 
 
+#: Flags whose value is a *produced* artefact this suite writes. A page may not read
+#: one of these unless an earlier step on that page created it. Raw user inputs (BAM,
+#: BigWig, FASTA, GTF, motif files) are deliberately excluded: a quick start is not
+#: expected to create the sequencing data it analyses.
+PRODUCED_FLAGS = {"--peak", "--peaks"}
+
+#: Flags whose value the example creates.
+OUTPUT_FLAGS = {"--out", "-o"}
+
+
+def _values(tokens: list[str], flags: set[str]) -> set[str]:
+    """Collect the values of ``flags`` from a token list (comma lists split)."""
+    found, want = set(), False
+    for token in tokens:
+        if want:
+            found.update(piece for piece in token.split(",") if piece)
+            want = False
+            continue
+        if token in flags:
+            want = True
+        elif "=" in token and token.split("=", 1)[0] in flags:
+            found.update(p for p in token.split("=", 1)[1].split(",") if p)
+    return found
+
+
+def check_documented_paths() -> list[str]:
+    """Flag a page that reads a peak set no earlier step on that page produces.
+
+    The parser check cannot see this. `--peak peaks/sample.narrowPeak` parses whether
+    or not that file is ever written, so the quick start used to tell a reader to QC a
+    file that step 2 writes under a different name, and all 81 examples "passed".
+
+    Only peak paths are checked, because they are the one intermediate this suite both
+    produces and consumes within a page. A peak path counts as produced when an
+    ``--out`` on the page is that path, is its parent directory, or is an ancestor:
+    `peaks` writes ``<out>/<stem>/<stem>_peaks.narrowPeak``, so the leaf name is the
+    writer's choice. Pages that create nothing are fragments and are skipped.
+    """
+    problems: list[str] = []
+    for page in sorted((REPO / "docs").rglob("*.md")):
+        # `commands/<name>.md` documents one invocation in isolation; the inputs it
+        # names are whatever the user already has. Only pages that present a *sequence*
+        # can be inconsistent about what they produce.
+        if page.parent.name == "commands":
+            continue
+        text = page.read_text(encoding="utf-8", errors="replace")
+        outs: set[str] = set()
+        peak_reads: list[tuple[int, str]] = []
+
+        for lineno, line in logical_lines(text):
+            match = re.match(r"^\s*easyepi\s+([a-z][a-z0-9-]*)\s*(.*)$", line)
+            if not match:
+                continue
+            rest = match.group(2).split(" #")[0].strip()
+            try:
+                tokens = shlex.split(rest)
+            except ValueError:
+                continue
+            outs.update(v.rstrip("/") for v in _values(tokens, OUTPUT_FLAGS))
+            for v in _values(tokens, PRODUCED_FLAGS):
+                v = v.rstrip("/")
+                # Only paths are checked. A bare token (`--peaks ctrl1,ctrl2`) is a
+                # sample label that `differential-peaks` resolves against --peak-dir,
+                # not a file this page must create.
+                if "/" not in v:
+                    continue
+                if v.startswith(("/", "~", "$")) or "${" in v:
+                    continue
+                peak_reads.append((lineno, v))
+
+        if not outs:
+            continue
+
+        def produced(path: str) -> bool:
+            """Whether an --out on this page plausibly writes ``path``.
+
+            Being merely *under* an --out is not enough: `peaks -o peaks/` writes
+            ``peaks/<stem>/<stem>_peaks.narrowPeak``, so ``peaks/sample.narrowPeak``
+            sits inside that directory yet is never created. The leaf therefore has
+            to look like something the writer names: the stem appears in it, or it
+            carries a peak-style suffix the writer appends.
+            """
+            leaf = path.rsplit("/", 1)[-1]
+            stem = leaf.split(".")[0]
+            if stem.endswith("_peaks"):
+                stem = stem[: -len("_peaks")]
+            for out in outs:
+                if path == out:
+                    return True
+                if not path.startswith(out + "/"):
+                    continue
+                parent = path[len(out) + 1:].rsplit("/", 1)[0] if "/" in path[len(out) + 1:] else ""
+                # `peaks` names the per-sample directory and prefixes the file with
+                # the same stem, so both carry it.
+                if parent and parent in leaf:
+                    return True
+                if stem and stem in parent:
+                    return True
+            return False
+
+        for lineno, path in peak_reads:
+            if not produced(path):
+                problems.append(
+                    f"{page.relative_to(REPO)}:{lineno}: reads peak set {path!r}, "
+                    f"which no step on this page writes (writes: "
+                    f"{', '.join(sorted(outs))})")
+    return problems
+
+
 def main() -> int:
     parser = build_parser()
     known = subparsers(parser)
@@ -99,6 +208,14 @@ def main() -> int:
             print(f"  {rel}:{lineno}: {line}")
         return 1
     print("every example is accepted by the live parser")
+
+    path_problems = check_documented_paths()
+    if path_problems:
+        print(f"\nPATHS a page reads but never produces: {len(path_problems)}")
+        for problem in path_problems:
+            print(f"  {problem}")
+        return 1
+    print("every example reads paths the same page produces")
     return 0
 
 
