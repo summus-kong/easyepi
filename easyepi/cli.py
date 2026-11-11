@@ -446,7 +446,9 @@ def build_parser() -> argparse.ArgumentParser:
     # The choices are listed so `--help` shows them and argparse rejects a typo,
     # which is what used to produce a report with an empty assay_qc.
     p_qc.add_argument("--assay", default=None, choices=list(ASSAY_CHOICES_FOR_CLI),
-                      help="assay label; enables the same verdict block as the "
+                      help="assay label: atac, chip, histone, mnase or "
+                           "methylation; CUT&Tag/CUT&RUN and common synonyms are "
+                           "accepted. Enables the same verdict block as the "
                            "assay-specific commands")
     p_qc.add_argument("--project", default=None, help="Project TOML or TSV sample manifest")
     p_qc.add_argument("--annotation", default=None, help="GTF/GFF annotation for TSS enrichment")
