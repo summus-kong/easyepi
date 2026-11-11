@@ -15,7 +15,6 @@ keywords = ["epigenomics", "CUT&Tag", "ChIP-seq", "ATAC-seq", "MNase", "peak", "
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS :: MacOS X",
     "Operating System :: Microsoft :: Windows",
