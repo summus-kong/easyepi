@@ -2,6 +2,15 @@
 
 ## 0.2.0 - unreleased
 
+- `easyepi[activity]` now works on Python 3.12 as well: `easyepi/activity.py` drives
+  both decoupler generations — 1.9.x through `dc.run_ulm` and 2.x through
+  `dc.mt.ulm`. The two APIs disagree on three things the adapter now handles: the
+  entry point, the matrix orientation (2.x takes samples-by-features and 2.x's
+  `mt/_run.py` already applies Benjamini-Hochberg, so `padj` is no longer corrected
+  twice), and the return shape for AnnData input. Verified against decoupler 2.1.6:
+  its t-values match 1.9.2 to 7.5e-07 on identical input.
+- `easyepi[activity]` also declares `anndata`, which decoupler imports while loading;
+  without it the extra installed and then raised ModuleNotFoundError: anndata.
 - Figures are written as **PDF (vector) by default** and are produced without
   being asked: a run that should have plotted no longer looks identical to one that
   did. `--figure-format` still selects png/svg/tiff/jpg, `--no-figures` writes only
