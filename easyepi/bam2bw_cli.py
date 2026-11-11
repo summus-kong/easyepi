@@ -19,27 +19,36 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Sequence
 
-#: Sensible defaults per assay. Stated here, printed by the command, recorded in
-#: the metadata: a user can always see which shift and bin size were applied.
+from easyepi.assays import CANONICAL_ASSAYS, canonical_assay
+
+#: Sensible defaults per assay, keyed by the canonical label from
+#: :mod:`easyepi.assays`. Printed by the command and recorded in the metadata,
+#: so a user can always see which shift and bin size were applied.
 ASSAY_DEFAULTS: dict[str, dict[str, Any]] = {
     "atac": {"shift": "tn5", "bin_size": 10, "normalize": "cpm"},
-    "cut&tag": {"shift": "tn5", "bin_size": 10, "normalize": "cpm"},
-    "cut&run": {"shift": "tn5", "bin_size": 10, "normalize": "cpm"},
     "chip": {"shift": "none", "bin_size": 25, "normalize": "cpm"},
     "histone": {"shift": "none", "bin_size": 25, "normalize": "cpm"},
     "mnase": {"shift": "none", "bin_size": 10, "normalize": "cpm"},
     "methylation": {"shift": "none", "bin_size": 100, "normalize": "raw"},
 }
 
-ASSAY_CHOICES = tuple(ASSAY_DEFAULTS)
+#: Overrides applied on top of ASSAY_DEFAULTS for Tn5 cut-site assays. CUT&Tag
+#: and CUT&RUN map to `chip` in the shared vocabulary because MACS3 treats them
+#: identically, but they measure a cut site, not read-body depth: handling them
+#: as plain `chip` silently dropped the +4/-5 shift that `--assay cut&tag` used
+#: to apply. Matching is by canonical label plus a separator-insensitive test, so
+#: `cut_tag` and `Cut Tag` are covered without listing every variant.
+_CUTSITE_DEFAULTS: dict[str, Any] = {"shift": "tn5", "bin_size": 10}
 
-#: Shell-safe spellings a user may type instead of the canonical key. `&` is a
-#: shell operator, so `--assay cut&tag` has to be quoted; accepting the unquoted
-#: `cuttag` is what the assay pages and the docs' own advice promise.
-_ASSAY_SPELLINGS: dict[str, str] = {
-    "cuttag": "cut&tag", "cutrun": "cut&run",
-    "cut-tag": "cut&tag", "cut-run": "cut&run",
-}
+
+def _is_cutsite_assay(assay: str) -> bool:
+    """Whether this assay measures a Tn5/MNase cut site rather than read depth."""
+    flat = str(assay).strip().lower()
+    for ch in ("_", " ", "-", "&"):
+        flat = flat.replace(ch, "")
+    return flat in {"cuttag", "cutrun"}
+
+ASSAY_CHOICES = CANONICAL_ASSAYS
 
 
 def resolve_defaults(assay: str | None) -> dict[str, Any]:
@@ -52,12 +61,15 @@ def resolve_defaults(assay: str | None) -> dict[str, Any]:
     if assay is None:
         return {"shift": "none", "bin_size": 25, "normalize": "raw",
                 "source": "fallback"}
-    key = assay.strip().lower()
-    key = _ASSAY_SPELLINGS.get(key, key)
-    if key not in ASSAY_DEFAULTS:
-        raise ValueError(
-            f"unknown assay {assay!r}; choose one of {', '.join(ASSAY_CHOICES)}")
-    return {**ASSAY_DEFAULTS[key], "source": "assay"}
+    # The vocabulary lives in easyepi.assays, so `cuttag`, `cut-tag`, `cut&tag`
+    # and every other accepted spelling resolve to one of the five keys here.
+    # AssayError is a ValueError, which is what callers of this function catch.
+    key = canonical_assay(assay)
+    defaults = dict(ASSAY_DEFAULTS[key])
+    if _is_cutsite_assay(assay):
+        # CUT&Tag/CUT&RUN share the `chip` metric set but not its signal handling.
+        defaults.update(_CUTSITE_DEFAULTS)
+    return {**defaults, "source": "assay"}
 
 
 def _sample_names(bams: Sequence[str], overrides: Sequence[str] | None) -> dict[str, str]:

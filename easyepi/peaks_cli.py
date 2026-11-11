@@ -29,24 +29,22 @@ from argparse import Namespace
 from pathlib import Path
 from typing import Any, Sequence
 
-#: Per-assay MACS3 options. Stated explicitly so an ATAC run cannot inherit ChIP
-#: assumptions; ``BAMPE`` is required for paired-end ATAC and CUT&Tag.
+from easyepi.assays import AssayError, canonical_assay
+
+#: Per-assay MACS3 options, keyed by the canonical label from
+#: :mod:`easyepi.assays`. Stated explicitly so an ATAC run cannot inherit ChIP
+#: assumptions; ``BAMPE`` is required for paired-end ATAC and CUT&Tag. CUT&Tag
+#: and CUT&RUN resolve to ``chip`` because MACS3 needs the same format for them;
+#: the shift is a `bam2bw` concern, not a peak-calling one.
 ASSAY_MACS_OPTIONS: dict[str, dict[str, Any]] = {
     "atac": {"format": "BAMPE", "broad": False, "shift": 0, "extsize": None},
-    "cuttag": {"format": "BAMPE", "broad": False, "shift": 0, "extsize": None},
-    "cutrun": {"format": "BAMPE", "broad": False, "shift": 0, "extsize": None},
     "chip": {"format": "BAM", "broad": False, "shift": 0, "extsize": None},
     "histone": {"format": "BAM", "broad": True, "shift": 0, "extsize": None},
     "mnase": {"format": "BAM", "broad": False, "shift": 0, "extsize": None},
 }
 
+#: Canonical assays peak calling supports: MACS3 has no bisulfite mode.
 ASSAY_CHOICES = tuple(ASSAY_MACS_OPTIONS)
-
-#: Spellings accepted on the command line -> keys of ``ASSAY_MACS_OPTIONS``.
-_ASSAY_SPELLINGS: dict[str, str] = {
-    "cut&tag": "cuttag", "cut&run": "cutrun",
-    "cut-tag": "cuttag", "cut-run": "cutrun",
-}
 
 _BAM_EXTS = (".bam",)
 
@@ -95,15 +93,22 @@ def run_peaks_command(args) -> int:
             "no input: peak calling needs a BAM",
             example="easyepi peaks sample.bam -o peaks/ --assay atac")
 
-    # `cut&tag` and `cut&run` are the spellings `bam2bw` accepts and the docs use, so
-    # peak calling accepts them too rather than rejecting a label the same study
-    # typed one step earlier.
-    assay = (getattr(args, "assay", None) or "").strip().lower()
-    assay = _ASSAY_SPELLINGS.get(assay, assay)
-    if assay and assay not in ASSAY_MACS_OPTIONS:
-        raise UsageError(
-            f"unknown assay {assay!r}; choose one of {', '.join(ASSAY_CHOICES)}",
-            example="easyepi peaks sample.bam -o peaks/ --assay atac")
+    # `cuttag`, `cut&tag` and the rest resolve through the shared vocabulary, so a
+    # label accepted by `bam2bw` one step earlier is accepted here too. MACS3 has
+    # no bisulfite mode, so `methylation` is rejected with the supported list.
+    raw_assay = getattr(args, "assay", None)
+    if raw_assay:
+        try:
+            assay = canonical_assay(raw_assay)
+        except AssayError:
+            assay = None
+        if assay not in ASSAY_MACS_OPTIONS:
+            raise UsageError(
+                f"unknown assay {raw_assay!r}; choose one of "
+                f"{', '.join(ASSAY_CHOICES)}",
+                example="easyepi peaks sample.bam -o peaks/ --assay atac")
+    else:
+        assay = ""
     opts = ASSAY_MACS_OPTIONS.get(assay, {"format": "BAM", "broad": False,
                                           "shift": 0, "extsize": None})
 

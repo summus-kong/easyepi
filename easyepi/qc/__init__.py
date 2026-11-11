@@ -36,6 +36,18 @@ def run_qc(args) -> int:
     # were written in a different order.
     inputs = resolve_inputs(args)
     assay = getattr(args, "assay", None)
+    if assay:
+        # Validate and canonicalise before anything reads it. A typo used to be
+        # passed straight to the payload, which returned an empty assay_qc and a
+        # report that looked successful: "chp" silently produced no FRiP. The
+        # canonical label is also what the metric table is keyed by, and what the
+        # input check uses to say which of the supplied tracks it will ignore.
+        from ..qc_assay import canonical_assay, check_inputs
+        assay = canonical_assay(assay)
+        for note in check_inputs(assay, {
+                sample: {kind: path for kind, path in tracks.items() if path}
+                for sample, tracks in inputs.items()}):
+            print(f"[easyepi] {note}")
     rules = load_rules(getattr(args, "qc_thresholds", None))
 
     result: dict[str, object] = {"samples": {}}

@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 from easyepi import __version__
+from easyepi.assays import accepted_spellings
 
 #: Assay labels accepted by ``bam2bw``/``qc``. Kept next to the version import so
 #: both parsers read one definition; a second copy would drift.
@@ -68,12 +69,10 @@ class EasyepiParser(argparse.ArgumentParser):
         self.exit(2, text + "\n")
 
 
-#: Canonical labels plus the shell-safe spellings. `&` is a shell operator, so
-#: `--assay cut&tag` must be quoted; accepting `cuttag` and `cutrun` unquoted is
-#: what the assay pages tell a user to type. Both forms resolve to one table key
-#: (see ``bam2bw_cli._ASSAY_SPELLINGS``).
-ASSAY_CHOICES_FOR_CLI = ("atac", "cut&tag", "cut&run", "cuttag", "cutrun",
-                         "chip", "histone", "mnase", "methylation")
+#: Every spelling the suite accepts, generated from :mod:`easyepi.assays` so a
+#: new alias reaches every command at once. Canonical labels come first, which is
+#: what `--help` shows most prominently.
+ASSAY_CHOICES_FOR_CLI = accepted_spellings()
 
 
 def _cmd_merge_qc_reports(args):
@@ -444,9 +443,10 @@ def build_parser() -> argparse.ArgumentParser:
                            "file by hand")
     p_qc.add_argument("--out", required=True, help="output report path")
     # Assay is optional: when omitted the command stays a generic BAM summary.
-    p_qc.add_argument("--assay", default=None,
-                      help="assay label (ATAC-seq, ChIP-seq, histone, MNase-seq, "
-                           "methylation); enables the same verdict block as the "
+    # The choices are listed so `--help` shows them and argparse rejects a typo,
+    # which is what used to produce a report with an empty assay_qc.
+    p_qc.add_argument("--assay", default=None, choices=list(ASSAY_CHOICES_FOR_CLI),
+                      help="assay label; enables the same verdict block as the "
                            "assay-specific commands")
     p_qc.add_argument("--project", default=None, help="Project TOML or TSV sample manifest")
     p_qc.add_argument("--annotation", default=None, help="GTF/GFF annotation for TSS enrichment")
@@ -513,13 +513,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_pk.add_argument("-c", "--control", action="append", default=None,
                       help="control BAM(s); repeatable or comma-separated")
     p_pk.add_argument("-o", "--out", required=True, help="output directory")
-    # `methylation` is dropped: ASSAY_CHOICES_FOR_CLI is shared with `bam2bw`, but
-    # MACS3 has no bisulfite mode, so offering it here promised a mode that
-    # the command rejects. CUT&Tag keeps the bam2bw spelling; peaks_cli
-    # normalises it to its own table key.
+    from easyepi.peaks_cli import ASSAY_CHOICES as PEAK_ASSAY_CHOICES
+
+    # MACS3 has no bisulfite mode, so `methylation` is not offered here; the list
+    # comes from the shared vocabulary restricted to the supported assays.
     p_pk.add_argument("--assay", default=None,
-                      choices=[a for a in ASSAY_CHOICES_FOR_CLI
-                               if a != "methylation"],
+                      choices=list(accepted_spellings(PEAK_ASSAY_CHOICES)),
                       help="sets format and broad/narrow defaults")
     p_pk.add_argument("--format", default=None,
                       help="MACS3 format: BAM, BAMPE, BED, BEDPE (default from --assay)")

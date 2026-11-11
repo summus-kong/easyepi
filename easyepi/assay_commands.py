@@ -56,6 +56,15 @@ def _generic_input_metrics(sample: Any) -> dict[str, Any] | None:
 
 def run_assay_qc(args: Any, assay: str) -> int:
     """Run input QC for one assay and write JSON, TSV and optional figures."""
+    # The alias commands (`atac-qc`, ...) pass a canonical label, but the value is
+    # normalised anyway so `make_assay_runner("cut&tag")` and any future caller
+    # resolve through one vocabulary rather than through the spelling they used.
+    # `assay` is normalised only to the canonical label for logic (metric table and
+    # thresholds). The output filename keeps the caller-supplied label because
+    # `atac-qc` has always written `atac_seq_qc.tsv`, and `merge-qc-reports`
+    # documents globbing `*_seq_qc.json`; silently renaming it would break both.
+    from .qc_assay import canonical_assay
+    canonical = canonical_assay(assay)
     out = Path(args.out)
     label = assay.upper().replace("-SEQ", "") + "-QC"
     logger = setup_logging(label, out, verbose=args.verbose, quiet=args.quiet, log_file=args.log_file)
@@ -70,7 +79,7 @@ def run_assay_qc(args: Any, assay: str) -> int:
                                getattr(config, "qc_thresholds", None))
         for sample_index, sample in enumerate(config.samples):
             if sample.assay == "unknown":
-                sample.assay = assay
+                sample.assay = canonical
             # Command-line inputs override the manifest so a single sample can be
             # re-QC'd against a freshly called peak file without editing the
             # manifest. Without this, --peak/--bigwig/--bam were silently ignored.
@@ -87,7 +96,7 @@ def run_assay_qc(args: Any, assay: str) -> int:
         if args.print_config:
             print((out / "resolved_config.json").read_text(encoding="utf-8"))
         if args.dry_run:
-            run.set_metrics(assay=assay, samples=len(config.samples), dry_run=True)
+            run.set_metrics(assay=canonical, samples=len(config.samples), dry_run=True)
             logger.info("Dry run: input validation completed")
             return 0
         rows: list[dict[str, Any]] = []
@@ -107,7 +116,7 @@ def run_assay_qc(args: Any, assay: str) -> int:
             generic = _generic_input_metrics(sample)
             if generic:
                 row["input_qc"] = generic
-            if assay.lower().startswith("methyl") and sample.methylation and Path(sample.methylation).exists():
+            if canonical.startswith("methyl") and sample.methylation and Path(sample.methylation).exists():
                 from .methylation import read_methylation_table, summarize_methylation
                 row["methylation_qc"] = summarize_methylation(read_methylation_table(sample.methylation))
             # Assay-specific + extended metrics come from the shared builder so this
@@ -115,7 +124,7 @@ def run_assay_qc(args: Any, assay: str) -> int:
             _annotation = getattr(args, "annotation", None) or config.annotation
             _blacklist = getattr(args, "blacklist", None) or getattr(config, "blacklist", None)
             _built = build_sample_payload(
-                assay,
+                canonical,
                 bam=sample.bam,
                 bigwig=sample.bigwig,
                 peak=sample.peak,
@@ -164,7 +173,7 @@ def run_assay_qc(args: Any, assay: str) -> int:
                     if isinstance(_v, (int, float, str, bool)):
                         flat[_k] = _v
                 writer.writerow(flat)
-        run.set_metrics(assay=assay, samples=len(rows), outputs=[str(tsv_path), str(json_path)])
+        run.set_metrics(assay=canonical, samples=len(rows), outputs=[str(tsv_path), str(json_path)])
         logger.info("Wrote %s and %s", tsv_path.name, json_path.name)
     return 0
 

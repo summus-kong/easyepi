@@ -4,50 +4,37 @@ Why one command instead of five
 -------------------------------
 ``atac-qc``, ``chip-qc``, ``histone-qc`` and ``mnase-qc`` were four names for one
 implementation: three of them were a single ``dispatch(...)`` call, and the only
-real difference is which metric set applies (``ASSAY_METRIC_BUILDERS``). Keeping
-five names meant five ``--help`` pages that each restated the same arguments, and
-a user had to know the taxonomy of the tool before they could run a QC.
+real difference is which metric set applies (``ASSAY_METRIC_BUILDERS``).
 
-This module gives one command whose *first* decision is the assay, stated by the
-user:
+This module answers the two questions that decide a QC: *which assay is this*, and
+*can the inputs it was given support that assay's metrics*. The vocabulary itself
+lives in :mod:`easyepi.assays`, so a spelling accepted here is accepted by
+``bam2bw`` and ``peaks`` as well.
 
-    easyepi qc --assay atac      --project p.toml --out qc/
-    easyepi qc --assay chip      --bam a.bam --peak a.narrowPeak --out qc/
-    easyepi qc --assay methylation --project p.toml --out qc/
-
-``--assay`` is required when the command cannot tell from the inputs, and is
-recorded in the report so the thresholds applied are auditable. Nothing is
-inferred from a filename without saying so.
+``--assay`` is required when the inputs cannot settle it, and is recorded in the
+report so the thresholds applied are auditable. Nothing is inferred from a filename
+without saying so.
 
 The metric set per assay is the shipped table, not a new one:
 
-===========  ==========================================
+===========  ==============================================
 assay        metrics
-===========  ==========================================
+===========  ==============================================
 atac         fragments, FRiP, signal enrichment
 chip         FRiP, signal enrichment
 histone      FRiP, signal enrichment
 mnase        periodicity, fragments
 methylation  beta-value distribution
-===========  ==========================================
+===========  ==============================================
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-#: Assay label -> aliases a user may reasonably type. Values are the canonical
-#: labels used in reports.
-ASSAY_ALIASES: dict[str, str] = {
-    "atac": "atac", "atac-seq": "atac", "atacseq": "atac",
-    "chip": "chip", "chip-seq": "chip", "chipseq": "chip",
-    "cut&tag": "chip", "cuttag": "chip", "cut&run": "chip", "cutrun": "chip",
-    "tf": "chip",
-    "histone": "histone", "histone-mark": "histone", "marks": "histone",
-    "mnase": "mnase", "mnase-seq": "mnase", "mnaseseq": "mnase",
-    "methylation": "methylation", "meth": "methylation", "wgbs": "methylation",
-    "bisulfite": "methylation",
-}
+from easyepi.assays import (ASSAY_ALIASES, CANONICAL_ASSAYS, AssayError,
+                            canonical_assay, describe_spellings, is_known)
+
 
 #: What each assay's QC can consume. Used to reject impossible requests early
 #: instead of producing a report full of "not evaluated".
@@ -56,16 +43,12 @@ ASSAY_INPUTS: dict[str, tuple[str, ...]] = {
     "chip": ("bam", "bigwig", "peak"),
     "histone": ("bam", "bigwig", "peak"),
     "mnase": ("bam",),
-    # A bisulfite BAM is the documented and preferred input: the aligner
-    # writes 5mC onto the record (MM/ML or Bismark XM), so `--bam` alone is
-    # enough. A `.cov`/`.bedMethyl` table stays accepted for data that
-    # arrives already called, which is why both names are listed.
+    # A bisulfite BAM is the documented and preferred input: the aligner writes 5mC
+    # onto the record (MM/ML or Bismark XM), so `--bam` alone is enough. A
+    # `.cov`/`.bedMethyl` table stays accepted for data that arrives already called,
+    # which is why both names are listed.
     "methylation": ("bam", "methylation"),
 }
-
-
-class AssayError(ValueError):
-    """Raised when the assay is missing, unknown, or incompatible with the inputs."""
 
 
 def resolve_assay(
@@ -80,12 +63,7 @@ def resolve_assay(
     error that lists the choices rather than a silent default.
     """
     if assay:
-        key = ASSAY_ALIASES.get(str(assay).strip().lower())
-        if key is None:
-            raise AssayError(
-                f"unknown assay {assay!r}; choose one of "
-                + ", ".join(sorted(set(ASSAY_ALIASES.values()))))
-        return key
+        return canonical_assay(assay)
 
     kinds = {kind for tracks in available.values() for kind in tracks}
     if not kinds:
@@ -94,30 +72,14 @@ def resolve_assay(
             "pass --assay to state what you measured")
     if kinds == {"methylation"}:
         return "methylation"
-    # BAM/peak/BigWig alone cannot distinguish ATAC from ChIP from histone: the
-    # files look identical. Say so instead of guessing a threshold table.
+    # BAM/peak/BigWig alone cannot distinguish ATAC from ChIP from histone: the files
+    # look identical. Say so instead of guessing a threshold table.
     raise AssayError(
         "cannot infer the assay from "
         + ", ".join(sorted(kinds))
-        + "; pass --assay atac|chip|histone|mnase|methylation. "
+        + f"; pass --assay {describe_spellings()}. "
         "The assay selects which QC metrics and thresholds apply, so it is not "
         "guessed.")
-
-
-def canonical_assay(assay: str) -> str:
-    """Normalise any accepted spelling to its table key.
-
-    `resolve_assay` accepts 21 spellings ("ATAC", "cut&tag", "wgbs", ...) but
-    the tables are keyed by the five canonical names. Every function that
-    indexes a table goes through here, so a spelling that `resolve_assay`
-    returns cannot raise KeyError one call later.
-    """
-    key = ASSAY_ALIASES.get(str(assay).strip().lower())
-    if key is None:
-        raise AssayError(
-            f"unknown assay {assay!r}; choose one of "
-            + ", ".join(sorted(set(ASSAY_ALIASES.values()))))
-    return key
 
 
 def check_inputs(assay: str, available: dict[str, dict[str, str]]) -> list[str]:
@@ -154,8 +116,7 @@ def describe() -> str:
     from easyepi.assay_metrics import ASSAY_METRIC_BUILDERS
 
     lines = ["assay        metrics"]
-    for assay in sorted({canonical_assay(a) for a in ASSAY_ALIASES}):
-        key = f"{assay}-qc"
-        metrics = ASSAY_METRIC_BUILDERS.get(key)
+    for assay in CANONICAL_ASSAYS:
+        metrics = ASSAY_METRIC_BUILDERS.get(f"{assay}-qc")
         lines.append(f"{assay:12s} {', '.join(metrics) if metrics else 'n/a'}")
     return "\n".join(lines)

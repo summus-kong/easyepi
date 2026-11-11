@@ -20,6 +20,8 @@ import math
 from pathlib import Path
 from typing import Any, Iterable
 
+from easyepi.assays import AssayError, canonical_assay
+
 # Nucleosome-free / mononucleosome / dinucleosome windows in base pairs, used by
 # ATAC and MNase fragment-length summaries.
 _NFR_MAX = 100
@@ -363,6 +365,22 @@ ASSAY_METRIC_BUILDERS: dict[str, tuple[str, ...]] = {
 }
 
 
+def _metric_key(assay: str) -> str:
+    """Map any accepted assay spelling to a key of ``ASSAY_METRIC_BUILDERS``.
+
+    Returns the input unchanged when it is unrecognised, so the caller reports
+    an empty metric set rather than raising: a project manifest may carry an
+    assay this suite does not model, and that is a reportable state.
+    """
+    text = str(assay).strip().lower()
+    if text.endswith("-qc") and text in ASSAY_METRIC_BUILDERS:
+        return text
+    try:
+        return f"{canonical_assay(text)}-qc"
+    except AssayError:
+        return text
+
+
 def compute_assay_metrics(assay: str, *, bam: str | None = None, bigwig: str | None = None,
                           peak: str | None = None, methylation_values: Iterable[float] | None = None,
                           max_reads: int = 200_000) -> dict[str, Any]:
@@ -370,28 +388,12 @@ def compute_assay_metrics(assay: str, *, bam: str | None = None, bigwig: str | N
 
     Returns a flat dict so it can be merged directly into the QC row.
     """
-    key = assay.lower()
-    # The CLI passes the human-readable assay ("ChIP-seq", "ATAC-seq", "MNase-seq",
-    # "histone", "methylation") while the metric table is keyed by command name.
-    # Project manifests are looser still: "ChIP", "CUT&Tag", "chip" and "atac" all
-    # appear in the wild, so normalisation strips separators and maps every known
-    # shorthand. Missing this is what silently dropped FRiP for assay="ChIP".
-    _alias = {
-        "chipseq": "chip-qc", "chip": "chip-qc", "cutandtag": "chip-qc",
-        "cutrun": "chip-qc", "cutandrun": "chip-qc",
-        "atacseq": "atac-qc", "atac": "atac-qc",
-        "histone": "histone-qc", "histonemark": "histone-qc", "histoneqc": "histone-qc",
-        "mnaseseq": "mnase-qc", "mnase": "mnase-qc",
-        "methylation": "methylation-qc", "methylseq": "methylation-qc",
-        "wgbs": "methylation-qc", "rrbs": "methylation-qc",
-        "bisulfite": "methylation-qc",
-    }
-    _norm = key.replace("-", "").replace("_", "").replace(" ", "").replace("&", "and")
-    key = _alias.get(_norm, key)
-    if key not in ASSAY_METRIC_BUILDERS:
-        key = _alias.get(key.replace("-qc", ""), key)
-    if key not in ASSAY_METRIC_BUILDERS:
-        key = _alias.get(_norm.replace("qc", ""), key)
+    # The metric table is keyed by "<canonical>-qc". The assay name arrives as the
+    # CLI label ("ChIP-seq", "ATAC-seq"), a project-manifest value ("CUT&Tag"),
+    # or an already-normalised "<canonical>-qc". easyepi.assays owns that
+    # vocabulary; keeping a second copy here is what once dropped FRiP for
+    # assay="ChIP" because the two spellings drifted apart.
+    key = _metric_key(assay)
     wanted = ASSAY_METRIC_BUILDERS.get(key, ())
     out: dict[str, Any] = {}
     if "fragments" in wanted and bam:
