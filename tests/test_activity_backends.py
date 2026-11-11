@@ -11,13 +11,16 @@ The adapter reads the installed version and dispatches. These tests pin the disp
 and the two properties that are easy to get wrong: the transpose, and applying FDR a
 second time to values 2.x already adjusted.
 
-The 2.x call shape was verified against decoupler 2.1.6 directly -- its
-``_func_ulm`` returns t-values that match 1.9.2 to 7.5e-07 on identical input, so the
-two paths compute the same statistic. What cannot run here is 2.x itself, which needs
-either an interpreter with it installed or a network; this file asserts the contract
-the adapter relies on instead of pretending to execute it.
+Both generations are faked rather than imported: CI installs 1.9.x on 3.11 and 2.x on
+3.12, so a test that calls whichever one happens to be present would assert different
+things on different rows of the matrix. The fake records what the adapter asked for;
+the real ULM arithmetic is covered by
+``tests/test_optional_readers.py::test_real_decoupler_ulm_returns_measured_activity``,
+which runs against the installed backend on both interpreters.
 """
 from __future__ import annotations
+
+import types
 
 import numpy as np
 import pandas as pd
@@ -38,84 +41,112 @@ def _inputs():
     return matrix, network
 
 
-def test_dispatch_reads_the_installed_generation(monkeypatch):
-    """The branch is chosen from package metadata, not from a probe that can lie."""
+def _fake_generation(calls: dict, *, adjusted: bool):
+    """Build a decoupler stand-in exposing exactly one generation's entry point."""
 
-    def fake_version(name):
-        assert name == "decoupler"
-        return "1.9.2"
+    def result(obs, sources):
+        # 2 sources, named so the caller can tell which axis was used
+        es = pd.DataFrame(np.zeros((len(obs), len(sources))),
+                          index=list(obs), columns=list(sources))
+        pv = pd.DataFrame(np.full((len(obs), len(sources)), 0.5),
+                          index=list(obs), columns=list(sources))
+        return es, pv
 
-    monkeypatch.setattr(activity, "version", fake_version)
+    def run_ulm(mat=None, net=None, source=None, target=None, weight=None,
+                min_n=None, verbose=False, use_raw=False):
+        calls["backend"] = "1.9"
+        calls["matrix_shape"] = tuple(mat.shape)
+        calls["index"] = list(mat.index)
+        calls["sources"] = sorted(set(net[source]))
+        return result(mat.index, calls["sources"])
+
+    def mt_ulm(data, net, tmin=5, raw=False, empty=True, bsize=250_000,
+               verbose=False):
+        calls["backend"] = "2"
+        calls["matrix_shape"] = tuple(data.shape)
+        calls["index"] = list(data.index)
+        calls["sources"] = sorted(set(net["source"]))
+        return result(data.index, calls["sources"])
+
+    module = types.SimpleNamespace(run_ulm=run_ulm)
+    module.mt = types.SimpleNamespace(ulm=mt_ulm)
+    return module
+
+
+def test_dispatches_to_1_9_when_that_is_installed(monkeypatch):
+    calls: dict = {}
+    monkeypatch.setattr(activity, "version", lambda name: "1.9.2")
+    monkeypatch.setitem(__import__("sys").modules, "decoupler",
+                        _fake_generation(calls, adjusted=False))
     matrix, network = _inputs()
     es, pv, adjusted = activity._run_ulm(matrix, network, 5)
 
-    # 1.9.x returns raw p-values, so the adapter must correct them itself.
+    assert calls["backend"] == "1.9"
+    # features x samples in, samples x features out: (4, 30), not (30, 4)
+    assert calls["matrix_shape"] == (4, 30)
+    assert calls["index"] == ["A1", "A2", "B1", "B2"]
+    # 1.9.x returns raw p-values, so the adapter must correct them itself
     assert adjusted is False
-    assert list(es.index) == list(matrix.columns)      # samples are rows
-    assert list(es.columns) == ["TF1", "TF2"]           # sources are columns
+    assert list(es.columns) == ["TF1", "TF2"]
 
 
-def test_the_transpose_is_applied_once(monkeypatch):
-    """Both APIs want samples as observations; the adapter passes ``matrix.T``.
+def test_dispatches_to_2_x_when_that_is_installed(monkeypatch):
+    calls: dict = {}
+    monkeypatch.setattr(activity, "version", lambda name: "2.3.1")
+    monkeypatch.setitem(__import__("sys").modules, "decoupler",
+                        _fake_generation(calls, adjusted=True))
+    matrix, network = _inputs()
+    es, pv, adjusted = activity._run_ulm(matrix, network, 5)
 
-    A double transpose would silently fit each sample as a feature, producing a
-    result with the right shape and the wrong meaning.
-    """
-    seen = {}
-    real_run_ulm = __import__("decoupler").run_ulm
+    assert calls["backend"] == "2"
+    # 2.x also wants observations on the index, so the same single transpose
+    assert calls["matrix_shape"] == (4, 30)
+    assert calls["index"] == ["A1", "A2", "B1", "B2"]
+    # 2.x already applied BH inside mt/_run.py
+    assert adjusted is True
+    assert list(es.columns) == ["TF1", "TF2"]
 
-    def spy(mat=None, **kwargs):
-        seen["shape"] = tuple(mat.shape)
-        seen["index"] = list(mat.index)
-        return real_run_ulm(mat=mat, **kwargs)
 
+def test_the_transpose_is_applied_exactly_once(monkeypatch):
+    """A double transpose yields the right shape with the wrong meaning."""
+    calls: dict = {}
     monkeypatch.setattr(activity, "version", lambda name: "1.9.2")
-    dc = __import__("decoupler")
-    monkeypatch.setattr(dc, "run_ulm", spy, raising=False)
-
+    monkeypatch.setitem(__import__("sys").modules, "decoupler",
+                        _fake_generation(calls, adjusted=False))
     matrix, network = _inputs()
     activity._run_ulm(matrix, network, 5)
+    # 30 features x 4 samples must reach the backend as 4 x 30
+    assert calls["matrix_shape"] == (4, 30)
+    assert calls["matrix_shape"] != matrix.shape
 
-    # features x samples in, samples x features out: (4, 30), not (30, 4)
-    assert seen["shape"] == (4, 30), seen
-    assert seen["index"] == ["A1", "A2", "B1", "B2"]
 
+@pytest.mark.parametrize("already_adjusted", [False, True])
+def test_padj_is_not_corrected_twice(monkeypatch, already_adjusted):
+    """`padj` must equal the backend's value when it says it already adjusted.
 
-def test_adjusted_pvalues_are_not_corrected_twice():
-    """When the backend already applied BH, `padj` must equal its p-value.
-
-    Applying BH twice shrinks padj without any statistical basis. The check is on the
-    public result, so it also catches a future refactor that loses the flag.
+    Applying BH twice shrinks padj with no statistical basis. Checked on the public
+    result so a refactor that loses the flag fails here.
     """
+    monkeypatch.setattr(activity, "version",
+                        lambda name: "2.3.1" if already_adjusted else "1.9.2")
+    monkeypatch.setitem(__import__("sys").modules, "decoupler",
+                        _fake_generation({}, adjusted=already_adjusted))
     matrix, network = _inputs()
     result = activity.estimate_tf_activity(matrix, network)
 
-    # 1.9.2 path: the adapter corrects, so padj >= pvalue per sample and both in [0,1]
     assert result.pvalue.between(0, 1).all()
     assert result.padj.between(0, 1).all()
-    assert (result.padj >= result.pvalue - 1e-12).all()
-
-    # and with the flag flipped (what 2.x reports) padj is passed through unchanged
-    import easyepi.activity as A
-
-    original = A._run_ulm
-
-    def fake(matrix, net, min_targets):
-        es, pv, _ = original(matrix, net, min_targets)
-        return es, pv, True
-
-    try:
-        A._run_ulm = fake
-        passed = A.estimate_tf_activity(matrix, network)
-    finally:
-        A._run_ulm = original
-
-    assert np.allclose(passed.padj.to_numpy(), passed.pvalue.to_numpy())
+    if already_adjusted:
+        assert np.allclose(result.padj.to_numpy(), result.pvalue.to_numpy())
+    else:
+        assert (result.padj >= result.pvalue - 1e-12).all()
 
 
 def test_an_unsupported_generation_fails_loudly(monkeypatch):
     """A version outside both known APIs must raise, not guess which one to call."""
     monkeypatch.setattr(activity, "version", lambda name: "0.4.0")
+    monkeypatch.setitem(__import__("sys").modules, "decoupler",
+                        _fake_generation({}, adjusted=False))
     matrix, network = _inputs()
     with pytest.raises(ImportError, match="not supported"):
         activity._run_ulm(matrix, network, 5)
