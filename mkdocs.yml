@@ -79,6 +79,9 @@ nav:
   - API reference:
       - easyepi.bam2bigwig: api/bam2bigwig.md
       - easyepi.coverage_parallel: api/coverage_parallel.md
+      - easyepi.peaks_cli: api/peaks_cli.md
+      - easyepi.macs_options: api/macs_options.md
+      - easyepi.tool_wrapper: api/tool_wrapper.md
       - easyepi.methylation_bam: api/methylation_bam.md
       - easyepi.dmr: api/dmr.md
       - easyepi.tf_annotate: api/tf_annotate.md
@@ -86,6 +89,7 @@ nav:
       - easyepi.nucleosome_positioning: api/nucleosome_positioning.md
       - easyepi.viz.genomeviews: api/genomeviews.md
       - easyepi.viz.panels: api/panels.md
+      - easyepi.formats: api/formats.md
       - easyepi.errors: api/errors.md
   - Reference:
       - Usage and input contracts: USAGE.md
