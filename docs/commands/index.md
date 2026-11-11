@@ -35,7 +35,7 @@ files; none requires another to have run first.
 | `washu` | show this help message and exit |
 
 Run `easyepi <command> --help` for the full option list of one command, or
-see [End-to-end examples](EXAMPLES.md) for a complete sequence.
+see [End-to-end examples](../EXAMPLES.md) for a complete sequence.
 
 ## Getting the options into the docs
 
