@@ -216,3 +216,54 @@ python maintenance/verify_linux.py
 The verifier records per-command logs and versions. Install the bam, bigwig, motif, stats and activity extras when using a venv instead of the conda specification; otherwise corresponding optional tests may skip. The supplied CI installs all these dependencies.
 
 No unit test, command plan or synthetic smoke example establishes biological validity, confirms equivalence to upstream software or completes publication benchmarking. See RELIABILITY.md for remaining development and validation priorities.
+
+## Genomic-region annotation, 0.3.0
+
+Date: 2026-11-12. Data: ENCODE H3K4me3 peaks against GENCODE v50 primary assembly,
+run on the Linux analysis host with `easyepi annotate --gtf` (native backend,
+midpoint mode, ChIPseeker-default 3000 bp promoter window).
+
+### Three defects fixed in this version
+
+Found by writing `tests/test_annotate_bins.py` against a hand-computed gene model;
+the classification module had no coverage of its own logic before that.
+
+| Defect | Effect before the fix |
+| --- | --- |
+| `Exon` sorted before the UTRs in `GENOMIC_BINS` | UTR peaks were captured by the enclosing exon interval, so the UTR bins were nearly empty on every dataset |
+| `_extract_utr` used global min/max of the CDS | every exon between the first and last CDS block counted as 3'UTR |
+| 5'/3' assigned from coordinate only | minus-strand genes had their UTRs swapped |
+| `_nearest_tss_distance` ignored strand | upstream of a minus-strand TSS reported the wrong sign |
+
+### Measured effect on a real peak set
+
+43,465 ENCODE H3K4me3 peaks, same inputs and same promoter window, only the bin
+priority changed back and forth:
+
+| bin | old priority | 0.3.0 |
+| --- | --- | --- |
+| Promoter | 29.22% | 29.22% |
+| 5'UTR | 4.26% | 4.26% |
+| 3'UTR | 0.02% | 0.63% |
+| Exon | 13.23% | 12.63% |
+| Intron | 33.61% | 33.61% |
+| Intergenic | 19.65% | 19.65% |
+
+The 3'UTR bin was 32x smaller than it should be, and the difference it stole went
+to `Exon`. This is why 0.3.0 is a new version rather than a 0.2.x patch: peak
+annotations in existing projects will change.
+
+### Sanity check against expectation
+
+H3K4me3 is a promoter-associated mark but by no means promoter-exclusive. The
+measured 29.2% promoter, 33.6% intronic, 19.7% intergenic distribution is the shape
+the literature reports for this mark, and it is produced by the same run.
+
+### Not yet done
+
+ChIPseeker concordance was attempted and is **not** established. ChIPseeker could
+not be installed on the analysis host: `rtracklayer`/`Rhtslib`/`XML` fail to compile
+because the R installation in the `seurat5` environment pins
+`CC = x86_64-conda-linux-gnu-cc`, which is absent from that prefix. `--backend`
+`pybedtools`/`pyranges` are untested against a reference implementation, and no
+cross-implementation agreement figure should be claimed until it runs.

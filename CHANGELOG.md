@@ -1,6 +1,41 @@
 # Changelog
 
-## 0.2.0 - unreleased
+## 0.3.0 - unreleased
+
+### Fixed
+
+- **The 5'UTR and 3'UTR bins could never be filled.** `GENOMIC_BINS` listed `Exon`
+  before the UTRs, and the classifier returns the first bin whose interval contains
+  the peak midpoint. An exon interval by definition contains its own UTRs, so every
+  UTR peak was captured by the enclosing `Exon` and both UTR bins reported zero on
+  every dataset. The priority is now `Promoter > 5'UTR > 3'UTR > Exon > Intron >
+  Intergenic`, matching ChIPseeker. **Peak annotations change**: UTR counts rise from
+  zero and `Exon` falls accordingly.
+- **3'UTR swallowed every exon after the coding region.** `_extract_utr` compared
+  each exon against the global `min(cds_start)` and `max(cds_end)`, so any exon
+  between the first and last CDS block counted as 3'UTR. On a GENCODE model that is
+  most internal exons. A UTR is now "exonic and non-coding": the piece adjacent to
+  the coding region, with later exons of the same transcript reported as `Exon`, as
+  ChIPseeker does.
+- **Minus-strand UTRs were on the wrong side.** 5' and 3' were assigned from genomic
+  coordinate alone, so every gene transcribed from the minus strand had its UTRs
+  swapped. Roughly half a mammalian genome is minus-strand, so this was wrong in a
+  way that partly averaged out instead of looking obviously broken.
+- **TSS distance ignored strand.** `_nearest_tss_distance` returned `midpoint - tss`
+  regardless of orientation, so a peak upstream of a minus-strand TSS got the wrong
+  sign. It is now signed "negative upstream" on both strands.
+
+### Added
+
+- `annotate --promoter-upstream` / `--promoter-downstream`, default 3000 each (the
+  ChIPseeker `tssRegion` default). The window was hardcoded.
+- `annotate` writes `annotation_bins.tsv` beside the per-peak table;
+  `--no-bins-summary` suppresses it.
+- `tests/test_annotate_bins.py`, 19 tests over a hand-computed gene model. The
+  classification logic previously had no coverage: only `_extract_utr` and
+  `_nearest_tss_distance` were referenced anywhere in the suite.
+
+## 0.2.0
 
 - `easyepi[activity]` now works on Python 3.12 as well: `easyepi/activity.py` drives
   both decoupler generations — 1.9.x through `dc.run_ulm` and 2.x through

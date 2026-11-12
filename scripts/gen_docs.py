@@ -134,6 +134,60 @@ def write_api_pages() -> list[Path]:
     return written
 
 
+#: Notes that argparse cannot express. Kept here rather than in the generated page so
+#: `gen_docs.py` stays the single writer: a hand-edited page would be overwritten.
+COMMAND_NOTES = {
+
+    "annotate": "\n".join([
+
+        "## Genomic-region bins",
+
+        "",
+
+        "Each peak is assigned to the first bin, in this order, whose interval",
+
+        "contains the peak midpoint:",
+
+        "",
+
+        "    Promoter > 5'UTR > 3'UTR > Exon > Intron > Intergenic",
+
+        "",
+
+        "`Promoter` is the window around the TSS set by `--promoter-upstream` and",
+
+        "`--promoter-downstream` (3000 each by default, the ChIPseeker `tssRegion`",
+
+        "default). A UTR is the exonic, non-coding piece of an exon: between the",
+
+        "transcript end and the first coding base (5'), or between the last coding",
+
+        "base and the polyadenylation site (3'). An exon further along the transcript",
+
+        "than the last CDS block is reported as `Exon`, not UTR.",
+
+        "",
+
+        "The UTRs precede `Exon` on purpose: an exon interval always contains its own",
+
+        "UTRs, so with `Exon` first the UTR bins could never be filled.",
+
+        "",
+
+        "`annotation_bins.tsv` is written beside the per-peak table with the bin",
+
+        "counts and fractions, which are the numbers usually quoted.",
+
+        "`--no-bins-summary` suppresses it.",
+
+    ]),
+
+}
+
+
+
+
+
 def write_command_pages(parser) -> list[Path]:
     """Per-command page: its purpose, its real option list, and a minimal call."""
     from easyepi.cli import MINIMAL_EXAMPLE
@@ -171,6 +225,7 @@ def write_command_pages(parser) -> list[Path]:
             "| --- | --- | --- | --- |",
             *rows,
             "",
+            *([COMMAND_NOTES[name], ""] if name in COMMAND_NOTES else []),
             "Generated from the live parser by `scripts/gen_docs.py`.",
             "",
         ]), encoding="utf-8")

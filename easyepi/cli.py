@@ -547,6 +547,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_an.add_argument("--backend", default="native", choices=["native", "pybedtools", "pyranges"])
     p_an.add_argument("--mode", default="midpoint", choices=["midpoint", "overlap"])
     p_an.add_argument("--min-overlap", type=float, default=0.0)
+    # The promoter window was hardcoded to TSS +/-3000, which is ChIPseeker's
+    # default and therefore the right default here; exposing it lets a user match
+    # a different ChIPseeker tssRegion, or ask about the core promoter only.
+    p_an.add_argument("--promoter-upstream", type=int, default=3000,
+                      help="bases upstream of the TSS counted as promoter "
+                           "(default 3000, as ChIPseeker)")
+    p_an.add_argument("--promoter-downstream", type=int, default=3000,
+                      help="bases downstream of the TSS counted as promoter "
+                           "(default 3000, as ChIPseeker)")
+    p_an.add_argument("--no-bins-summary", action="store_false", dest="bins_summary",
+                      help="do not write annotation_bins.tsv")
     p_an.add_argument("--out", required=True,
                    help="output directory for annotation tables")
     add_figure_args(p_an)

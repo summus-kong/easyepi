@@ -101,13 +101,22 @@ def _nearest_tss_distance(query_starts, query_ends, query_chrom,
             continue
         pos = [p for p, _, _ in by_chrom[c]]
         k = bisect.bisect_left(pos, mid)
-        best, best_id = None, None
+        best, best_id, best_strand = None, None, "+"
         for cand in (k - 1, k):
             if 0 <= cand < len(by_chrom[c]):
-                p, ident, _ = by_chrom[c][cand]
+                p, ident, strand = by_chrom[c][cand]
                 if best is None or abs(p - mid) < abs(best - mid):
-                    best, best_id = p, ident
-        dist = (mid - best) if best is not None else np.nan
+                    best, best_id, best_strand = p, ident, strand
+        if best is None:
+            out_ids.append(None)
+            out_dists.append(np.nan)
+            continue
+        # Sign by orientation, not by raw coordinate: upstream of a plus-strand
+        # TSS is negative, upstream of a minus-strand TSS is positive. Without
+        # this every distance reads as if the gene were on the plus strand, which
+        # makes a TSS-distance histogram wrong for half the genome -- the exact
+        # quantity a ChIPseeker comparison looks at.
+        dist = (mid - best) if best_strand != "-" else (best - mid)
         out_ids.append(best_id)
         out_dists.append(dist)
     return out_ids, np.array(out_dists, dtype=np.float64)
@@ -182,10 +191,17 @@ def annotate_peaks(peaks_chrom, peaks_start, peaks_end,
 # Genomic-region classification (TSS / UTR / exon / intron / TTS / intergenic)
 # ---------------------------------------------------------------------------
 # bin order for consistent reporting (ChIPseeker-style categories)
-GENOMIC_BINS = ["Promoter", "5'UTR", "Exon", "Intron", "3'UTR", "Intergenic"]
+#: Order IS the priority: when a peak falls inside two bins, the earlier wins.
+#: UTRs precede Exon because a UTR is by definition part of an exon, so if Exon
+#: came first every UTR peak would be swallowed by the exon interval that
+#: contains it and the UTR bins would always be empty. This matches ChIPseeker,
+#: whose default is Promoter > 5UTR > 3UTR > Exon > Intron > Downstream >
+#: Intergenic. `Downstream` is not modelled here; such peaks report Intergenic.
+GENOMIC_BINS = ["Promoter", "5'UTR", "3'UTR", "Exon", "Intron", "Intergenic"]
 
 
-def _make_tx_feature_sets(txs):
+def _make_tx_feature_sets(txs, promoter_upstream: int = 3000,
+                          promoter_downstream: int = 3000):
     """Split a gene table into per-feature coordinate arrays.
 
     ``txs`` is an iterable of dicts with keys:
@@ -209,9 +225,15 @@ def _make_tx_feature_sets(txs):
             for i in range(len(es) - 1):
                 s = es[i][1]; e2 = es[i + 1][0]
                 d["Intron"][0].append(chrom); d["Intron"][1].append(s); d["Intron"][2].append(e2); d["Intron"][3].append(strand)
-        # Promoter: TSS +/- 3000 (ChIPseeker default tssRegion c(-3000,3000))
+        # Promoter: TSS +/- the configured window. The default reproduces
+        # ChIPseeker's tssRegion = c(-3000, 3000), which is what the 3901-peak
+        # benchmark compares against; a narrower window is what a user wants
+        # when they care about the immediate core promoter instead.
         if tss is not None:
-            d["Promoter"][0].append(chrom); d["Promoter"][1].append(tss - 3000); d["Promoter"][2].append(tss + 3000); d["Promoter"][3].append(strand)
+            d["Promoter"][0].append(chrom)
+            d["Promoter"][1].append(tss - int(promoter_upstream))
+            d["Promoter"][2].append(tss + int(promoter_downstream))
+            d["Promoter"][3].append(strand)
         # 5'/3'UTR approximated from exons outside the CDS
         utr5 = _extract_utr(e, cds, strand, end="5")
         for s, e2 in utr5:
@@ -221,30 +243,96 @@ def _make_tx_feature_sets(txs):
             d["3'UTR"][0].append(chrom); d["3'UTR"][1].append(s); d["3'UTR"][2].append(e2); d["3'UTR"][3].append(strand)
     out = {}
     for k, (c, s, e, st) in d.items():
-        out[k] = (np.array(c, dtype=object), np.array(s, dtype=np.int64),
+        starts = np.array(s, dtype=np.int64)
+        # A promoter window can run past the contig start for a TSS near 0;
+        # a negative start is not a coordinate, so clamp it. ChIPseeker clips
+        # the same way (the interval is intersected with the sequence length).
+        starts = np.maximum(starts, 0)
+        out[k] = (np.array(c, dtype=object), starts,
                   np.array(e, dtype=np.int64), np.array(st, dtype=object))
     return out
 
 
 def _extract_utr(exons, cds, strand, end):
-    """Approximate 5'/3' UTR intervals as exonic regions outside the CDS."""
+    """Return exonic intervals that lie outside every CDS block.
+
+    UTR is by definition *exonic and non-coding*, so the test is per exon: subtract
+    the union of the CDS blocks from it. The previous version compared each exon
+    against the global ``min(cds_start)`` / ``max(cds_end)``, which is only correct
+    for a single-CDS gene. For a real multi-exon CDS it classified the internal
+    exons -- those between the first and last CDS block -- as 3'UTR, because they
+    are neither below the minimum nor above the maximum yet contain no coding
+    sequence at all. On a GENCODE gene model that inflates the 3'UTR bin and
+    depresses Exon, so a ChIPseeker comparison would have measured this bug rather
+    than any modelling difference.
+
+    ``end`` selects which side to return ("5" or "3"); the caller asks twice.
+    """
     if not cds or not exons:
         return []
-    cds_min = min(s for s, _ in cds); cds_max = max(e for _, e in cds)
-    utr5 = []
-    utr3 = []
-    for s, e2 in exons:
-        # Clip exon flanks outside CDS, then assign 5-prime and 3-prime by strand.
-        if e2 <= cds_min:
-            (utr5 if strand == "+" else utr3).append((s, e2))
-        elif s >= cds_max:
-            (utr3 if strand == "+" else utr5).append((s, e2))
+
+    # Merge the CDS blocks once; a gene's CDS may be split across many exons.
+    merged: list = []
+    for s, e in sorted(cds):
+        if merged and s <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], e))
         else:
-            if s < cds_min:
-                (utr5 if strand == "+" else utr3).append((s, cds_min))
-            if e2 > cds_max:
-                (utr3 if strand == "+" else utr5).append((cds_max, e2))
-    return utr5 if end == "5" else utr3
+            merged.append((s, e))
+
+    def uncovered(s: int, e: int) -> list:
+        """Pieces of [s, e) not covered by any CDS block."""
+        pieces = []
+        cursor = s
+        for cs, ce in merged:
+            if ce <= cursor:
+                continue
+            if cs >= e:
+                break
+            if cs > cursor:
+                pieces.append((cursor, min(cs, e)))
+            cursor = max(cursor, ce)
+            if cursor >= e:
+                break
+        if cursor < e:
+            pieces.append((cursor, e))
+        return [(a, b) for a, b in pieces if b > a]
+
+    # A UTR is the part of an exon that lies outside the coding region *and is
+    # contiguous with it along the transcript*: the 5'UTR runs from the capped
+    # end to the first CDS base, the 3'UTR from the last CDS base to the
+    # polyadenylation site. Exons past the last CDS block are annotated as Exon
+    # by ChIPseeker, not as 3'UTR, so they must not be collected here -- doing
+    # so put every downstream exon into the 3'UTR bin.
+    # Orientation in genomic coordinates. On the plus strand translation begins at
+    # the lowest CDS coordinate and ends at the highest, so the 5'UTR is the
+    # piece left of ``cds_start`` and the 3'UTR the piece right of ``cds_end``.
+    # On the minus strand the transcript is read right-to-left, so the two swap:
+    # 5'UTR is right of ``cds_end`` and 3'UTR is left of ``cds_start``. Reading
+    # coordinates without that flip puts every minus-strand gene's UTRs on the
+    # wrong side, which is invisible in the bin totals but wrong for the roughly
+    # half of the genome transcribed from the minus strand.
+    cds_start = min(s for s, _ in merged)
+    cds_end = max(e for _, e in merged)
+    five, three = [], []
+    for s, e in exons:
+        # Left of the CDS: 5'UTR on plus, 3'UTR on minus.
+        if e <= cds_start:
+            piece = (s, e)
+        elif s < cds_start:
+            piece = (s, cds_start)
+        else:
+            piece = None
+        if piece:
+            (five if strand != "-" else three).append(piece)
+
+        # Right of the CDS: 3'UTR on plus, 5'UTR on minus. Only the piece
+        # abutting the stop codon counts; a further exon is transcribed but is
+        # conventionally reported as Exon, so it is skipped.
+        if s >= cds_end:
+            continue
+        if e > cds_end:
+            (three if strand != "-" else five).append((cds_end, e))
+    return five if end == "5" else three
 
 
 def classify_peaks_to_genomic_bins(peaks_chrom, peaks_start, peaks_end,
@@ -427,7 +515,16 @@ def run_annotate(args) -> int:
         if not Path(gtf).exists():
             raise FileNotFoundError(f"GTF not found: {gtf}")
         txs = _read_gtf_txs(gtf)
-        fsets = _make_tx_feature_sets(txs)
+        upstream = int(getattr(args, "promoter_upstream", 3000))
+        downstream = int(getattr(args, "promoter_downstream", 3000))
+        # A negative window would silently invert the interval; reject it here
+        # rather than produce an empty Promoter bin that looks like a data result.
+        if upstream < 0 or downstream < 0:
+            raise ValueError(
+                f"promoter window must not be negative: "
+                f"-{upstream}/+{downstream}")
+        fsets = _make_tx_feature_sets(txs, promoter_upstream=upstream,
+                                      promoter_downstream=downstream)
         labels, _ = classify_peaks_auto(pc, ps, pe, fsets,
                                         backend=getattr(args, "backend", "native"),
                                         mode=getattr(args, "mode", "midpoint"),
@@ -451,6 +548,23 @@ def run_annotate(args) -> int:
             w.writerow([c, int(s), int(e), int(e - s), labels[i], tss_gene[i] or "NA",
                         tss_dist[i] if np.isfinite(tss_dist[i]) else "NA"])
     print(f"[easyepi] per-peak annotation written to {out} ({n} peaks)")
+
+    # The bin distribution is the number a reader actually cites ("62% of peaks
+    # are promoters"), and it is the quantity the ChIPseeker benchmark compares.
+    # Writing it as its own table keeps it out of the per-peak file, which a
+    # downstream tool parses by column position.
+    if gtf and getattr(args, "bins_summary", True):
+        counts = {b: 0 for b in GENOMIC_BINS}
+        for lab in labels:
+            counts[lab] = counts.get(lab, 0) + 1
+        summary = out.parent / "annotation_bins.tsv"
+        with open(summary, "w", newline="") as fh:
+            w = csv.writer(fh, delimiter="\t")
+            w.writerow(["annotation", "peaks", "fraction"])
+            for b in GENOMIC_BINS:
+                c = counts.get(b, 0)
+                w.writerow([b, c, round(c / n, 6) if n else 0.0])
+        print(f"[easyepi] bin distribution written to {summary}")
     return 0
 
 
