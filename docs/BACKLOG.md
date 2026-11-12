@@ -13,6 +13,11 @@ Last reviewed: 2026-11-12 (v0.6.0).
 * Anything measurable gets a number in `VERIFICATION.md`, including failures.
 * Optional dependencies are installed with micromamba from `conda-forge`/`bioconda`;
   `pip` cannot reach PyPI from the analysis host.
+* Commits and `git push` happen on the local workstation only; the analysis host is
+  not a push portal. Remote work is copied back and checksum-verified before it is
+  committed. See `DEVELOPMENT.md`, "Where commits are made and pushed".
+* No item may be pushed before `tests/` passes on the analysis host and
+  `scripts/gen_docs.py` exits 0.
 
 ---
 
@@ -50,12 +55,12 @@ zeros for the null features. Pinned by `tests/test_deseq2_adapter.py`.
 
 | Sub-task | Status | Notes |
 | --- | --- | --- |
-| TSS enrichment score | TODO | needs `genome.fa` + TSS table; both exist on the host |
+| TSS enrichment score | DONE (v0.6.0) | `easyepi/tss_enrichment.py`; `qc --tss` accepts a GTF directly. Four states, so a zero-background library reads as measured-and-failed rather than never measured |
 | Fragment-length distribution | TODO | derive from BAM CIGAR/TLEN; report nucleosome-free/mono/di peaks |
 | Duplicate fraction | TODO | pysam `get_duplicate_flag`; distinct from library complexity |
 | Mitochondrial fraction | TODO | needs a chrom-name pattern; make it a flag, not a guess |
 | Library complexity (preseq-style estimate) | TODO | at minimum: distinct fragments / total fragments |
-| Replicate concordance | TODO | pairwise correlation + Jaccard on peaks; needs a group column |
+| Replicate concordance | DONE (v0.6.0) | `easyepi concordance`; `--peaks` gives correlation + Jaccard, `--matrix` correlation only. No threshold by design |
 | Documented filtering rules | TODO | thresholds must be in `QC.md`, not only in code |
 
 ## 3. Fragment counting backend

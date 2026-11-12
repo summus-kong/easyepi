@@ -153,6 +153,40 @@ Expose an importable function first; keep command parsing in the independent mod
 
 Use unique output directories per module. Shared files such as status.json are not a workflow scheduler or concurrent-run registry. Threads are passed only to supported backends; the generic --threads metadata flag does not parallelize every Python function. Paths in input data may contain Unicode, but maintained source prose and CLI output are English.
 
+## Where commits are made and pushed
+
+The analysis host is the development machine: it runs the tests, and its interpreter
+is the one `docs/VERIFICATION.md` records. It is not where a push happens.
+
+**The local workstation is the only portal to GitHub.** Commits are made and
+`git push` runs on the local workstation, never on the analysis host. A change
+developed and verified remotely therefore travels back first:
+
+```bash
+# 1. on the analysis host: verify, then copy the changed files to a staging path
+python -m pytest tests -q
+tar -C "$STAGE" -czf /tmp/out.tar.gz .
+
+# 2. pull the artifacts to the local workstation, then unpack into the local tree
+#    and confirm byte identity before committing
+md5sum <files>            # compared on both sides
+
+# 3. on the local workstation only
+git add -A && git commit && git push origin main
+```
+
+Two properties this ordering protects:
+
+* **The pushed tree is exactly the verified tree.** Files are compared by
+  checksum after the round trip; a silent edit on either side shows up as a
+  mismatch rather than as a commit that was never tested.
+* **Credentials and history stay in one place.** The analysis host holds no push
+  credentials, so a compromised or misconfigured shared host cannot publish.
+
+The analysis host can reach `github.com` (a `git ls-remote` succeeds from it), so
+this is a working rule, not a network limitation. Do not substitute a remote
+`git push` for the round trip just because it happens to work.
+
 ## Linux verification commands
 
 ```bash
