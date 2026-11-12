@@ -160,6 +160,46 @@ def check_documented_paths() -> list[str]:
     return problems
 
 
+SITE_URL = "https://summus-kong.github.io/easyepi/"
+DOC_LINK = re.compile(re.escape(SITE_URL) + r"[A-Za-z0-9_./-]*")
+
+
+def nav_pages() -> set[str]:
+    """Absolute URLs of every page listed in mkdocs.yml, derived the same way."""
+    config = (REPO / "mkdocs.yml").read_text(encoding="utf-8")
+    pages = set()
+    for md in re.findall(r":\s+([A-Za-z0-9_./-]+\.md)\s*$", config, flags=re.M):
+        stem = md[:-3]
+        if stem == "index":
+            pages.add(SITE_URL)
+        elif stem.endswith("/index"):
+            pages.add(SITE_URL + stem[:-6] + "/")
+        else:
+            pages.add(SITE_URL + stem + "/")
+    return pages
+
+
+def check_readme_links() -> list[str]:
+    """README.md links to published pages; every one must exist in the nav.
+
+    Checked against ``mkdocs.yml`` rather than by fetching the site: a network check
+    would fail for reasons unrelated to the repository, and the nav is the same source
+    the build uses to decide what exists. A link that is not in the nav is either a
+    typo or a page that was removed, and both should fail before publishing.
+    """
+    readme = REPO / "README.md"
+    if not readme.exists():
+        return []
+    known = nav_pages()
+    problems = []
+    text = readme.read_text(encoding="utf-8", errors="replace")
+    for lineno, line in enumerate(text.splitlines(), 1):
+        for url in DOC_LINK.findall(line):
+            if url not in known:
+                problems.append(f"README.md:{lineno}: {url} is not a page in mkdocs.yml")
+    return problems
+
+
 def main() -> int:
     parser = build_parser()
     known = subparsers(parser)
@@ -216,6 +256,14 @@ def main() -> int:
             print(f"  {problem}")
         return 1
     print("every example reads paths the same page produces")
+
+    link_problems = check_readme_links()
+    if link_problems:
+        print(f"\nREADME doc links that match no nav page: {len(link_problems)}")
+        for problem in link_problems:
+            print(f"  {problem}")
+        return 1
+    print("every documentation link in README.md resolves to a nav page")
     return 0
 
 

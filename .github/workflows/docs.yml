@@ -28,6 +28,11 @@ on:
       - "easyepi/**"
       - "tests/**"
       - "scripts/**"
+      # README links to every published page, so a change there can break the
+      # documentation contract without touching docs/ at all. Without this entry a
+      # README-only commit skipped the build entirely, which is how a stale link
+      # could ship.
+      - "README.md"
       - ".github/workflows/docs.yml"
   pull_request:
     paths:
@@ -36,6 +41,7 @@ on:
       - "easyepi/**"
       - "tests/**"
       - "scripts/**"
+      - "README.md"
   workflow_dispatch:
 
 permissions:
