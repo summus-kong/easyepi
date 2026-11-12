@@ -502,3 +502,37 @@ All three backends remain identical at 99.76% and 100.0000% against each other.
 A regression test now covers the scan directly: a long interval whose start comes
 first and ends after later, shorter ones -- a list whose `ends` is unsorted -- plus a
 shuffle-invariance check.
+
+## 0.5.2 — 3'UTR covers every untranslated exon, reaching 99.99%
+
+0.5.1 left 105 peaks differing, all UTR-versus-Exon, and attributed them to UTR
+provenance -- the idea that ChIPseeker reads `threeUTRsByTranscript` while this code
+derives UTRs arithmetically. Two checks showed that was wrong:
+
+* For a sampled transcript, GENCODE's `UTR` rows and `exons - CDS` are **the same
+  interval set** (verified as a set comparison, not by eye). Reading the UTR rows
+  would have changed nothing.
+* Inspecting the failing peaks directly: each one overlaps an **Exon** interval of
+  this code's feature set and **zero** of its UTR intervals (0 for both 5' and 3').
+  So the UTR sets disagreed about which regions exist, not about how to label them.
+
+The actual cause was one `continue` in `_extract_utr`: after the last CDS block the
+code kept only the piece abutting the stop codon and discarded every later exon, on
+the reasoning that "a downstream exon is still an exon". That is true of the feature
+type but not of the annotation. A 36-exon gene routinely has several exons past
+translation end, and every one of them is untranslated sequence.
+
+| metric | 0.5.1 | 0.5.2 |
+| --- | --- | --- |
+| per-peak exact agreement | 99.76% | **99.99%** |
+| disagreeing peaks | 105 | **4** |
+| 3'UTR intervals | 617,876 | 892,775 |
+| 5'UTR intervals | 487,261 | 625,728 |
+
+The four that remain are all `Exon -> 3'UTR`: peaks where a transcript's CDS status
+differs between the two builds of the annotation, which is a data question rather
+than a rule question. All three backends still agree 100.0000% with each other.
+
+Three tests that had encoded the old behaviour were corrected rather than deleted.
+They were written from the same incorrect reasoning as the code and had been passing
+against it -- a test can pin a bug just as easily as it can pin a fix.

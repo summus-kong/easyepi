@@ -1,6 +1,35 @@
 # Changelog
 
-## 0.5.1 - unreleased
+## 0.5.2 - unreleased
+
+### Fixed
+
+- **3'UTR covered only the block abutting the stop codon.** `_extract_utr` kept the
+  untranslated tail of the exon containing the stop codon and discarded every exon
+  after it, on the reasoning that a downstream exon is "still an exon". That is true
+  of the feature type but not of the annotation: a 36-exon gene routinely has several
+  exons past translation end and every one of them is untranslated sequence.
+
+  **Agreement with ChIPseeker goes 99.76% -> 99.99%**; disagreeing peaks fall from
+  105 to 4. The UTR interval counts change accordingly: 3'UTR 617,876 -> 892,775 and
+  5'UTR 487,261 -> 625,728.
+
+- Corrects the 0.5.1 attribution. That release blamed the residual 105 on UTR
+  provenance -- that ChIPseeker reads `threeUTRsByTranscript` while this derives UTRs
+  arithmetically. Two checks disproved it: for a sampled transcript GENCODE's `UTR`
+  rows and `exons - CDS` are the identical interval set, and each failing peak
+  overlapped an Exon interval and zero UTR intervals. The sets disagreed about which
+  regions exist, not about how to label them.
+
+Three tests that had encoded the old behaviour were corrected, not deleted. They were
+written from the same incorrect reasoning as the code and had been green against it.
+
+### Known gap
+
+4 peaks (0.01%) remain, all `Exon -> 3'UTR`, where a transcript's CDS status differs
+between annotation builds. That is a data question rather than a rule question.
+
+## 0.5.1
 
 ### Fixed
 

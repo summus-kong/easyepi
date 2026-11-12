@@ -100,20 +100,24 @@ def test_exonic_region_between_cds_blocks_is_exon():
                      promoter_downstream=0) == ["Exon"]
 
 
-def test_three_prime_utr_after_the_last_cds_block():
-    """Only the block abutting the stop codon is 3'UTR; a later exon is Exon.
+def test_three_prime_utr_covers_every_exon_past_the_stop_codon():
+    """All exonic bases beyond the stop codon are 3'UTR, not just the first block.
 
-    Exon 2 (9,000-10,000) contains CDS 2 (9,000-9,800), so 9,800-10,000 is the
-    untranslated tail of that exon. Exons 3 and 4 come after translation ends and
-    ChIPseeker reports them as Exon, not 3'UTR.
+    A 36-exon gene typically has several exons after translation ends; every one of
+    them is untranslated. Keeping only the piece abutting the stop codon left 91
+    peaks labelled Exon where ChIPseeker says 3'UTR (measured on 43,465 peaks).
+
+    Exon 2 (9,000-10,000) contains CDS 2 (9,000-9,800), so 9,800-10,000 is that
+    exon's untranslated tail, and exons 3 and 4 lie wholly past the stop codon.
     """
     fsets = _make_tx_feature_sets([_tx()], promoter_upstream=0,
                                   promoter_downstream=0)
     assert list(zip(fsets["3'UTR"][1].tolist(),
-                    fsets["3'UTR"][2].tolist())) == [(9800, 10000)]
-    # a peak whose midpoint is in the removed downstream exon is Exon, not 3'UTR
+                    fsets["3'UTR"][2].tolist())) == [
+        (9800, 10000), (12000, 13000), (19000, 20000)]
+    # a peak in a downstream untranslated exon is 3'UTR, not Exon
     assert _classify([(12400, 12600)], promoter_upstream=0,
-                     promoter_downstream=0) == ["Exon"]
+                     promoter_downstream=0) == ["3'UTR"]
 
 
 def test_utr_is_exonic_and_non_coding_not_everything_past_the_cds():
@@ -127,11 +131,15 @@ def test_utr_is_exonic_and_non_coding_not_everything_past_the_cds():
     fsets = _make_tx_feature_sets([_tx()], promoter_upstream=0,
                                   promoter_downstream=0)
     three = list(zip(fsets["3'UTR"][1].tolist(), fsets["3'UTR"][2].tolist()))
-    # the old implementation produced three blocks here; the fixed one produces one
-    assert three == [(9800, 10000)], three
+    # Exons 3 and 4 carry no CDS and lie past the stop codon, so they are
+    # untranslated exonic sequence: 3'UTR. What must NOT happen is the reverse --
+    # an exon that *contains* CDS being swallowed into 3'UTR because it sits between
+    # the first and last CDS block.
+    assert three == [(9800, 10000), (12000, 13000), (19000, 20000)], three
     assert _classify([(12400, 12600)], promoter_upstream=0,
-                     promoter_downstream=0) == ["Exon"]
-    assert _classify([(19400, 19600)], promoter_upstream=0,
+                     promoter_downstream=0) == ["3'UTR"]
+    # and a coding exon is still Exon, not UTR
+    assert _classify([(9450, 9550)], promoter_upstream=0,
                      promoter_downstream=0) == ["Exon"]
 
 
@@ -190,12 +198,12 @@ def test_minus_strand_swaps_utr_sides():
     three = list(zip(fsets["3'UTR"][1].tolist(), fsets["3'UTR"][2].tolist()))
 
     # On the minus strand the transcript runs right-to-left, so translation starts
-    # at the right-hand CDS edge (9,800) and ends at the left-hand one (1,800):
-    #   5'UTR is the piece just right of 9,800  -> (9,800, 10,000)
-    #   3'UTR is the piece just left of 1,800   -> (1,000, 1,800)
+    # at the right-hand CDS edge (9,800) and ends at the left-hand one (1,800).
+    # Everything to the right of 9,800 is 5'UTR, everything left of 1,800 is 3'UTR --
+    # including whole exons, on both sides.
     # Getting this backwards is the classic strand bug, which is why it is asserted
     # on the exact intervals rather than only on the labels.
-    assert five == [(9800, 10000)], five
+    assert five == [(9800, 10000), (12000, 13000), (19000, 20000)], five
     assert three == [(1000, 1800)], three
     assert _classify([(9850, 9950)], tx=tx, promoter_upstream=0,
                      promoter_downstream=0) == ["5'UTR"]

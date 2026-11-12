@@ -416,12 +416,17 @@ def _extract_utr(exons, cds, strand, end):
         if piece:
             (five if strand != "-" else three).append(piece)
 
-        # Right of the CDS: 3'UTR on plus, 5'UTR on minus. Only the piece
-        # abutting the stop codon counts; a further exon is transcribed but is
-        # conventionally reported as Exon, so it is skipped.
+        # Right of the CDS: 3'UTR on plus, 5'UTR on minus. Every exonic base
+        # beyond the stop codon is untranslated, including entire exons that sit
+        # past the last CDS block -- a 36-exon gene typically has several. An
+        # earlier version kept only the piece abutting the stop codon and called
+        # the rest Exon, on the reasoning that a downstream exon is "still an
+        # exon". That is true of the feature type but not of the annotation: it
+        # left 91 peaks labelled Exon where ChIPseeker says 3'UTR, because the
+        # peaks fall in exactly those downstream untranslated exons.
         if s >= cds_end:
-            continue
-        if e > cds_end:
+            (three if strand != "-" else five).append((s, e))
+        elif e > cds_end:
             (three if strand != "-" else five).append((cds_end, e))
     return five if end == "5" else three
 
