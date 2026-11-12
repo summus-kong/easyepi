@@ -444,3 +444,46 @@ def test_no_feature_overlapping_a_peak_leaves_it_unassigned():
         np.array(["chr1"], dtype=object), np.array([900]), np.array([950]),
         feature_sets, mode="overlap")
     assert labels[0] == "Intergenic", labels
+
+
+# -------------------------------------------- UTR slivers at codon boundaries
+def test_sub_three_base_utr_slivers_are_dropped():
+    """A 1-3 bp sliver outside the CDS is not a UTR.
+
+    GENCODE defines some CDS blocks so a stop or start codon straddles an exon
+    boundary. Building a TxDb normalises those slivers away; deriving UTRs does not.
+    Left in, they add UTR features ChIPseeker has no equivalent for -- 2,281
+    transcripts on GENCODE v50, and 4 mislabelled peaks in a 43,465-peak benchmark.
+    Measured: every such sliver is <= 3 bp, none between 4 and 50, so the cutoff
+    cannot clip a genuine UTR.
+    """
+    # CDS ends 2 bp short of its exon: a 2 bp sliver, must be dropped.
+    tx = {"gene_id": "G1", "chrom": "chr1", "start": 1000, "end": 5000,
+          "strand": "+", "tss": 1000, "tes": 5000,
+          "exons": [(1000, 2000), (3000, 5000)],
+          "cds": [(1500, 1998), (3000, 4998)]}
+    fsets = _make_tx_feature_sets([tx], promoter_upstream=0, promoter_downstream=0)
+    # no qualifying interval at all: the builder omits the key rather than storing []
+    assert "3'UTR" not in fsets or len(fsets["3'UTR"][1]) == 0, \
+        fsets.get("3'UTR", (None, []))[1].tolist()
+
+
+def test_a_genuine_utr_survives_the_sliver_filter():
+    """A 4 bp or longer tail is kept: the cutoff must not clip real UTRs."""
+    tx = {"gene_id": "G1", "chrom": "chr1", "start": 1000, "end": 5000,
+          "strand": "+", "tss": 1000, "tes": 5000,
+          "exons": [(1000, 2000), (3000, 5000)],
+          "cds": [(1500, 2000), (3000, 4990)]}   # 10 bp tail
+    fsets = _make_tx_feature_sets([tx], promoter_upstream=0, promoter_downstream=0)
+    assert list(zip(fsets["3'UTR"][1].tolist(),
+                    fsets["3'UTR"][2].tolist())) == [(4990, 5000)]
+
+
+def test_sliver_filter_applies_on_the_minus_strand_too():
+    tx = {"gene_id": "G1", "chrom": "chr1", "start": 1000, "end": 5000,
+          "strand": "-", "tss": 4999, "tes": 1000,
+          "exons": [(1000, 2000), (3000, 5000)],
+          "cds": [(1002, 2000), (3000, 5000)]}   # 2 bp sliver at the left end
+    fsets = _make_tx_feature_sets([tx], promoter_upstream=0, promoter_downstream=0)
+    assert "3'UTR" not in fsets or len(fsets["3'UTR"][1]) == 0, \
+        fsets.get("3'UTR", (None, []))[1].tolist()

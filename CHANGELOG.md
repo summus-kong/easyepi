@@ -1,6 +1,36 @@
 # Changelog
 
-## 0.5.2 - unreleased
+## 0.5.3 - unreleased
+
+### Fixed
+
+- **3 bp UTR slivers were emitted as real UTR intervals.** GENCODE defines some CDS
+  blocks so a start or stop codon straddles an exon boundary, leaving a 1-3 bp piece
+  outside the CDS. Building a TxDb normalises those away; deriving UTRs arithmetically
+  does not, so the slivers became UTR features ChIPseeker has no counterpart for.
+
+  Found by comparing transcript *sets* rather than peaks: 2,281 transcripts had a
+  3'UTR here and not in ChIPseeker, and every one of them totalled at most 3 bp --
+  2,281 in the 1-3 bp band, zero in 4-10, zero in 11-50, maximum 3 bp. Pieces shorter
+  than 4 bp are now dropped, a threshold that clips no genuine UTR because nothing
+  between 4 and 50 bp was ever affected.
+
+  **Agreement with ChIPseeker goes 99.99% -> 99.9954%**; disagreeing peaks fall from
+  4 to 2, and the 3'UTR interval count moves from 892,775 to 886,722 against
+  ChIPseeker's 886,766.
+
+- Corrects the 0.5.2 attribution, which called the residual 4 a data question. Three
+  of them were caused by this, and the direction was determined by querying
+  `threeUTRsByTranscript` at the exact peak coordinates: 0 hits, so ChIPseeker had
+  UTR intervals this code lacked, not the reverse.
+
+### Known gap
+
+2 peaks (0.0046%) remain -- one `5'UTR -> Exon`, one `Exon -> 3'UTR`, one case in each
+direction and no residual pattern. Matching them further would be fitting individual
+peaks rather than correcting a rule.
+
+## 0.5.2
 
 ### Fixed
 

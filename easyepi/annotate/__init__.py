@@ -428,7 +428,21 @@ def _extract_utr(exons, cds, strand, end):
             (three if strand != "-" else five).append((s, e))
         elif e > cds_end:
             (three if strand != "-" else five).append((cds_end, e))
-    return five if end == "5" else three
+    # GENCODE defines some CDS blocks so that a stop or start codon straddles an
+    # exon boundary, which leaves a 1-3 bp sliver outside the CDS. Building a TxDb
+    # normalises these away; deriving UTRs here does not, and the slivers are then
+    # emitted as real UTR intervals. Left in, they add a UTR feature covering a
+    # few bases that ChIPseeker does not have, which was worth 2,281 transcripts
+    # and 4 mislabelled peaks on a 43,465-peak benchmark.
+    #
+    # Measured: every such sliver is <= 3 bp (max observed 3 bp, none between 4 and
+    # 50), so the threshold below cannot clip a genuine UTR. Three bases is below
+    # any regulatory or annotation significance, and the alternative -- keeping
+    # them -- means this module and ChIPseeker can never agree.
+    MIN_UTR_BP = 4
+    out = [p for p in (five if end == "5" else three)
+           if p[1] - p[0] >= MIN_UTR_BP]
+    return out
 
 
 def classify_peaks_to_genomic_bins(peaks_chrom, peaks_start, peaks_end,

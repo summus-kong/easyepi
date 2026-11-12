@@ -536,3 +536,47 @@ than a rule question. All three backends still agree 100.0000% with each other.
 Three tests that had encoded the old behaviour were corrected rather than deleted.
 They were written from the same incorrect reasoning as the code and had been passing
 against it -- a test can pin a bug just as easily as it can pin a fix.
+
+## 0.5.3 — 3 bp UTR slivers, reaching 99.995%
+
+0.5.2 left 4 peaks differing and called them a data question. That was wrong: they
+were a modelling difference with an identifiable cause.
+
+The four peaks overlap an Exon interval and **zero** UTR intervals of this code,
+yet ChIPseeker says 3'UTR -- so ChIPseeker had UTR intervals here that this code did
+not. (The reverse would have been this code over-covering.) Querying
+`threeUTRsByTranscript` at exactly those coordinates returned 0 hits, which settled
+the direction.
+
+Comparing the transcript *sets* rather than the peaks:
+
+| | this code | ChIPseeker |
+| --- | --- | --- |
+| transcripts with a 3'UTR | 351,479 | 349,198 |
+| 3'UTR intervals | 892,775 | 886,766 |
+| present only here | **2,281** | 0 |
+| present only in ChIPseeker | 0 | -- |
+
+Every one of the 2,281 has a 3'UTR totalling **at most 3 bp**, and the distribution is
+unambiguous: 2,281 in the 1-3 bp band, zero in 4-10, zero in 11-50, maximum 3 bp.
+GENCODE defines some CDS blocks so a start or stop codon straddles an exon boundary,
+leaving a sliver outside the CDS. `makeTxDbFromGFF` normalises those away when it
+builds a TxDb; deriving UTRs arithmetically does not, so the slivers became real UTR
+features that covered four peaks.
+
+`_extract_utr` now drops pieces shorter than 4 bp. The threshold is safe by
+measurement rather than by assertion: nothing between 4 and 50 bp was ever dropped,
+so no genuine UTR is clipped.
+
+| metric | 0.5.2 | 0.5.3 |
+| --- | --- | --- |
+| per-peak exact agreement | 99.99% | **99.9954%** |
+| disagreeing peaks | 4 | **2** |
+| 3'UTR intervals | 892,775 | 886,722 |
+| ChIPseeker 3'UTR intervals | 886,766 | 886,766 |
+
+The two that remain are one `5'UTR -> Exon` and one `Exon -> 3'UTR`, i.e. one case in
+each direction. At 0.0046% with no residual pattern, further matching would be fitting
+individual peaks rather than correcting a rule.
+
+All three backends remain identical at 99.9954% and 100.0000% against each other.
