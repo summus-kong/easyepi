@@ -45,7 +45,7 @@ MINIMAL_EXAMPLE: dict[str, str] = {
                       "--chrom chr1 --start 0 --end 5000000 --out states/",
     "integrate": "easyepi integrate --gene-bed genes.bed --track S=a.bw --out int/",
     "normalize": "easyepi normalize --matrix counts.tsv --factors f.tsv --out norm.tsv",
-    "diff": "easyepi diff --project project.toml --out diff/",
+    "diff": "easyepi diff --counts counts.tsv --design design.tsv --method deseq2 --out diff/deseq2.tsv",
     "viz": "easyepi viz --regions regions.bed --out viz/ --figure-format pdf",
     "washu": "easyepi washu --manifest tracks.tsv --out washu/",
     "init": "easyepi init /data/bams --out project.toml",
@@ -742,10 +742,27 @@ def build_parser() -> argparse.ArgumentParser:
     p_df = sub.add_parser("diff", help="design-aware differential analysis")
     p_df.add_argument("--counts", required=True, help="count matrix TSV")
     p_df.add_argument("--design", required=True, help="design TSV with sample_id and group/condition")
-    p_df.add_argument("--method", default="mannwhitney", choices=["mannwhitney", "ttest", "wilcoxon"],
-                      help="independent-group test (default: mannwhitney); wilcoxon requires --pair")
+    p_df.add_argument("--method", default="mannwhitney",
+                      choices=["mannwhitney", "ttest", "wilcoxon", "deseq2"],
+                      help="independent-group test (default: mannwhitney); "
+                           "wilcoxon requires --pair; deseq2 fits a negative-binomial "
+                           "count model and needs raw integer counts plus >=2 "
+                           "replicates per group")
     p_df.add_argument("--pair", default=None, help="design column containing paired subject IDs")
     p_df.add_argument("--equal-var", action="store_true", help="assume equal variance for t-test")
+    # deseq2-only options. They are accepted for every method so a project file can
+    # carry them, but the adapter is what enforces their meaning.
+    p_df.add_argument("--design-factors", default=None,
+                      help="comma-separated design columns to add as additive terms "
+                           "(e.g. batch,sex); deseq2 only")
+    p_df.add_argument("--ref-level", default=None,
+                      help="reference level for the group factor; defaults to the "
+                           "second level alphabetically; deseq2 only")
+    p_df.add_argument("--lfc-shrink", action="store_true",
+                      help="apply apeGLM-style LFC shrinkage; deseq2 only")
+    p_df.add_argument("--no-independent-filter", action="store_true",
+                      help="test every feature, skipping DESeq2 independent "
+                           "filtering; deseq2 only")
     p_df.add_argument("--out", required=True,
                    help="output TSV for the comparison table")
     add_figure_args(p_df)

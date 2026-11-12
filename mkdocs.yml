@@ -75,6 +75,7 @@ nav:
       - tf-annotate: commands/tf-annotate.md
       - dmr: commands/dmr.md
       - differential-peaks: commands/differential-peaks.md
+      - diff: commands/diff.md
       - visualisation: commands/viz.md
   - API reference:
       - easyepi.assays: api/assays.md

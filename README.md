@@ -227,6 +227,7 @@ the repository by `scripts/gen_docs.py` and deployed on each push to `main`.
 | [tf-annotate](https://summus-kong.github.io/easyepi/commands/tf-annotate/) | Naming the TFs a peak can bind |
 | [dmr](https://summus-kong.github.io/easyepi/commands/dmr/) | Differential methylation regions |
 | [differential-peaks](https://summus-kong.github.io/easyepi/commands/differential-peaks/) | Consensus peaks to FDR |
+| [diff](https://summus-kong.github.io/easyepi/commands/diff/) | Count-model differential analysis (PyDESeq2) |
 | [visualisation](https://summus-kong.github.io/easyepi/commands/viz/) | Heatmaps, metagene profiles, correlation |
 
 ### Methods and reference

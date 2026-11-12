@@ -1,6 +1,38 @@
 # Changelog
 
-## 0.5.3 - unreleased
+## 0.6.0 - unreleased
+
+### Added
+
+- **`easyepi diff --method deseq2`**: negative-binomial count model via PyDESeq2
+  0.5.4, replacing the rank/t-test path for designs where inference — not exploration
+  — is wanted. It supports covariates (`--design-factors`), independent filtering, LFC
+  shrinkage (`--lfc-shrink`) and records the model provenance (PyDESeq2 version,
+  design formula, contrast, replicate counts, dispersion fit) beside the results table.
+
+  The existing `mannwhitney` / `ttest` / `wilcoxon` methods are unchanged and remain
+  the default; `--method deseq2` is opt-in.
+
+### Fixed (found while building it)
+
+- **PyDESeq2's `contrast` reports the reciprocal of what R DESeq2 does.** For
+  `contrast=[factor, first, second]` it returns log2(second / first), so passing the
+  operands in the natural reading order inverts every `log2FoldChange` while leaving
+  p-values and significance untouched. Established by building data where the
+  direction is known — group B doubled, group A halved — and reading off which operand
+  order gives +1; the first version of the adapter reported ±the wrong sign and the
+  test in `tests/test_deseq2_adapter.py` now pins the correct one.
+- `ref_level` is deprecated in PyDESeq2 0.5 and has no effect. The adapter no longer
+  passes it rather than exposing a parameter that is silently ignored.
+
+### Input contract
+
+`--method deseq2` refuses, with the reason rather than a rounded value: non-integer
+counts (normalised signal), negative counts, NaN/inf, fewer than 4 samples, and fewer
+than 2 replicates per group. A design factor with a single level is rejected too —
+it cannot be estimated, and dropping it silently would hide a design mistake.
+
+## 0.5.3
 
 ### Fixed
 

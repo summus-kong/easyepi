@@ -138,6 +138,38 @@ def write_api_pages() -> list[Path]:
 #: `gen_docs.py` stays the single writer: a hand-edited page would be overwritten.
 COMMAND_NOTES = {
 
+    "diff": "\n".join([
+        "## Choosing a method",
+        "",
+        "`mannwhitney` (default), `ttest` and `wilcoxon` compare the values in",
+        "the count matrix directly. They are signal comparisons: no count model,",
+        "no covariates, no dispersion estimate. Use them to look at data, not to",
+        "conclude from it.",
+        "",
+        "`deseq2` fits a negative-binomial GLM through PyDESeq2, which is the",
+        "inference path: it models counts, absorbs covariates supplied with",
+        "`--design-factors`, and reports shrunken fold changes on request.",
+        "",
+        "### What `--method deseq2` requires",
+        "",
+        "Raw integer counts. The matrix is rejected, with the reason, if it holds",
+        "non-integer values (which usually means normalised signal), negative",
+        "counts, NaN or inf, fewer than four samples, or fewer than two",
+        "replicates per group. A `--design-factors` column with a single level is",
+        "rejected too, because it cannot be estimated.",
+        "",
+        "### Direction of `log2FoldChange`",
+        "",
+        "Reported as `log2(group_a / group_b)`: positive means higher in the",
+        "first group. PyDESeq2 itself returns the reciprocal for a given",
+        "contrast operand order, so the adapter passes the operands reversed",
+        "deliberately -- do not \"fix\" that without re-running the sign test in",
+        "`tests/test_deseq2_adapter.py`.",
+        "",
+        "`<out>.deseq2.json` records the model that was fitted: PyDESeq2 version,",
+        "design formula, contrast, replicate counts, dispersion fit and how many",
+        "features were filtered out before testing.",
+    ]),
     "annotate": "\n".join([
 
         "## Genomic-region bins",
@@ -194,6 +226,7 @@ def write_command_pages(parser) -> list[Path]:
 
     choices = _subparsers(parser)
     wanted = ["bam2bw", "qc", "peaks", "annotate", "tf-annotate", "dmr",
+              "diff",
               "differential-peaks", "viz"]
     written = []
     (DOCS / "commands").mkdir(parents=True, exist_ok=True)

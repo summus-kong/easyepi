@@ -209,6 +209,45 @@ def run_diff(args) -> int:
         ordered = a_ids + [b_by_pair[pair] for pair in a_pairs]
         mat = mat[:, [sample_ids.index(sid) for sid in ordered]]
         mask_a = np.array([True] * len(a_ids) + [False] * len(a_ids))
+    if method == "deseq2":
+        # A negative-binomial count model, not a rank test. The adapter refuses
+        # non-integer or negative input and requires replicates, because DESeq2's
+        # dispersion estimate has no meaning without them.
+        from .deseq2 import run_deseq2
+
+        factors = getattr(args, "design_factors", None) or ()
+        if isinstance(factors, str):
+            factors = tuple(f.strip() for f in factors.split(",") if f.strip())
+        ref = getattr(args, "ref_level", None)
+        res = run_deseq2(
+            region_ids, mat, sample_ids, design, mask_a, levels,
+            design_factors=tuple(factors),
+            ref_level=(levels[1], ref) if ref else None,
+            lfc_shrink=bool(getattr(args, "lfc_shrink", False)),
+            independent_filter=not bool(getattr(args, "no_independent_filter", False)),
+            quiet=True)
+        with open(out, "w", newline="") as fh:
+            w = csv.writer(fh, delimiter="\t")
+            w.writerow(["region", "group_a", "group_b", "baseMean",
+                        "log2FoldChange", "lfcSE", "stat", "pvalue", "padj", "test"])
+            for i, rid in enumerate(region_ids):
+                def _v(key):
+                    arr = res.get(key)
+                    return "" if arr is None else arr[i]
+                w.writerow([rid, levels[0], levels[1], res["baseMean"][i],
+                            res["log2FoldChange"][i], _v("lfcSE"), _v("stat"),
+                            res["pvalue"][i], res["padj"][i], "deseq2"])
+        info = res["info"]
+        report = out.with_suffix(out.suffix + ".deseq2.json")
+        import json as _json
+        report.write_text(_json.dumps(info, indent=2), encoding="utf-8")
+        print(f"[easyepi] deseq2: design {info['design']} = "
+              f"{levels[0]} vs {levels[1]}; {info['treated_as_na_before_filtering']} "
+              "features untested after independent filtering")
+        print(f"[easyepi] deseq2 details written to {report}")
+        print(f"[easyepi] differential results written to {out}")
+        return 0
+
     res = differential_features(mat, mask_a, method=method,
                                 equal_var=bool(getattr(args, "equal_var", False)))
     with open(out, "w", newline="") as fh:
