@@ -261,9 +261,73 @@ the literature reports for this mark, and it is produced by the same run.
 
 ### Not yet done
 
-ChIPseeker concordance was attempted and is **not** established. ChIPseeker could
-not be installed on the analysis host: `rtracklayer`/`Rhtslib`/`XML` fail to compile
-because the R installation in the `seurat5` environment pins
-`CC = x86_64-conda-linux-gnu-cc`, which is absent from that prefix. `--backend`
-`pybedtools`/`pyranges` are untested against a reference implementation, and no
-cross-implementation agreement figure should be claimed until it runs.
+The `--backend pybedtools` and `--backend pyranges` paths are still untested
+against a reference implementation. Only the `native` backend is covered by the
+benchmark above.
+
+## ChIPseeker benchmark, 0.3.0 — **does not meet the threshold**
+
+Run 2026-11-12 on the Linux analysis host. Both sides used a TxDb built from the
+**same** GENCODE v50 GTF (`txdbmaker::makeTxDbFromGFF`) so the comparison measures
+the classification algorithm, not two gene-model sources. Same peak file, same
+order, same promoter window (TSS +/-3000). ChIPseeker 1.46.1.
+
+Peaks: 43,465 ENCODE H3K4me3.
+
+### Result
+
+| metric | value | threshold | verdict |
+| --- | --- | --- | --- |
+| per-peak exact agreement | **57.66%** | >= 93% | fail |
+| coarse agreement (Promoter/Genic/Intergenic) | **59.19%** | >= 98% | fail |
+| max per-bin frequency delta | **36.15 pp** | <= 2 pp | fail |
+
+| bin | ChIPseeker | easyepi | delta |
+| --- | --- | --- | --- |
+| Promoter | 65.37% | 29.22% | -36.15 |
+| 5'UTR | 0.10% | 4.26% | +4.16 |
+| 3'UTR | 1.58% | 0.63% | -0.95 |
+| Exon | 1.61% | 12.63% | +11.02 |
+| Intron | 21.62% | 33.61% | +11.99 |
+| Intergenic | 9.72% | 19.65% | +9.93 |
+
+### Root cause: one TSS per gene instead of one per transcript
+
+The disagreement is systematic, not noise:
+
+* **The easyepi Promoter set is a strict subset of ChIPseeker's.** Of the peaks
+  ChIPseeker calls Promoter, 15,713 are called something else by easyepi; the
+  reverse count is **0**.
+* **The two sides' TSS distances are uncorrelated** (Pearson r = 0.007 on the
+  disagreeing peaks). They are not measuring the same TSS at all.
+* TSS distance is the mechanism: 60% of the disagreements sit within 3 kb of the
+  ChIPseeker TSS, and 39.7% are within 3 kb for ChIPseeker but farther for easyepi.
+
+`_read_gtf_txs` keys its gene table by `gene_id` and takes the `gene` line's span,
+so every gene contributes **one** TSS. ChIPseeker derives TSS from **all**
+transcripts. Worked example, `ENSG00000223764.3` (minus strand):
+
+```
+gene        916865-925614   -> easyepi TSS = 925613
+transcripts 916865-921016, 916870-919692, 917370-918534,
+            917563-925585, 917573-919306
+```
+
+A peak at chr1:940534 is 0 bp from a ChIPseeker TSS and 15,099 bp from easyepi's.
+Genes with a long 3' tail, or a `gene` span wider than any transcript, push the
+single TSS far from the real ones; multiply that over 78,941 genes with 646,577
+transcripts and the Promoter bin loses half its content.
+
+### Verdict
+
+**The benchmark fails and this version is not ChIPseeker-concordant.** The three
+bins fixed earlier were genuinely broken and the fixes stand, but they were not the
+whole story: the TSS model is architecturally different, and that dominates the
+output. Nothing in this version should be described as agreeing with ChIPseeker.
+
+The fix is to derive one TSS per transcript, matching ChIPseeker. That is a larger
+change than the bin-priority fixes: it changes every peak's annotation and the
+Promoter fraction roughly doubles. It is deliberately **not** done in 0.3.0, because
+it needs its own before/after record and its own re-run of this benchmark.
+
+Reproduce with `bench/build_txdb.R`, `bench/run_chipseeker.R` and `bench/compare.py`.

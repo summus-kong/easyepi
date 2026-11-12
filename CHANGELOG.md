@@ -25,6 +25,20 @@
   regardless of orientation, so a peak upstream of a minus-strand TSS got the wrong
   sign. It is now signed "negative upstream" on both strands.
 
+### Verified — and found wanting
+
+- **ChIPseeker benchmark run and failed.** 43,465 H3K4me3 peaks, one TxDb built from
+  the same GENCODE v50 GTF for both sides, same 3000 bp window: per-peak exact
+  agreement **57.66%**, coarse agreement **59.19%**, largest per-bin delta **36.2 pp**.
+  Against thresholds of 93% / 98% / 2 pp this version is **not** ChIPseeker-concordant.
+- **Cause found, fix deliberately deferred.** `_read_gtf_txs` keys on `gene_id` and
+  takes the `gene` line's span, so each gene contributes one TSS; ChIPseeker derives a
+  TSS from every transcript. The easyepi Promoter set is a strict subset of
+  ChIPseeker's (0 disagreements in the other direction) and the two TSS-distance
+  columns are uncorrelated (r = 0.007). Deriving one TSS per transcript roughly
+  doubles the Promoter fraction, so it changes every annotation and needs its own
+  before/after record — it is not part of this release.
+
 ### Added
 
 - `annotate --promoter-upstream` / `--promoter-downstream`, default 3000 each (the
