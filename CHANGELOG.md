@@ -1,6 +1,41 @@
 # Changelog
 
-## 0.3.0 - unreleased
+## 0.4.0 - unreleased
+
+### Changed
+
+- **One TSS per transcript instead of one per gene.** `_read_gtf_txs` keyed its table
+  on `gene_id` and used the `gene` line's span, so every gene contributed a single
+  TSS. ChIPseeker derives a TSS from every transcript, and on a 78,941-gene /
+  646,577-transcript annotation that difference dominated the output: the Promoter
+  bin was 29% instead of 65% and agreement with ChIPseeker was 58%. Records are now
+  emitted per transcript, each carrying `transcript_id`, the gene id and the gene
+  span, so downstream output can still report a gene.
+
+  The parser also stopped relying on `(?:gene_id|transcript_id)`, which matched
+  `gene_id` first and therefore attached every exon and CDS to the gene rather than
+  the transcript.
+
+  **Peak annotations change again.** On 43,465 H3K4me3 peaks the bins move from
+  Promoter 29.2% / Exon 12.6% / Intron 33.6% / Intergenic 19.7% to
+  Promoter 51.3% / Exon 5.3% / Intron 23.8% / Intergenic 16.3%.
+
+### Verified
+
+- ChIPseeker agreement rises from **57.66% to 80.39%** exact and from **59.19% to
+  81.61%** coarse, with the largest per-bin delta falling from 36.2 to 14.1
+  percentage points. Still below the 93% / 98% thresholds, so this version is
+  **still not ChIPseeker-concordant**; the residual is dominated by
+  `Promoter -> Intron/Exon` cases where the two disagree about which transcript
+  starts nearest a peak.
+- ChIPseeker's `Downstream` bin holds 19 of 43,465 peaks (0.04%), so folding it into
+  `Intergenic` is confirmed harmless rather than assumed.
+- **All three annotation backends agree exactly.** `native`, `pybedtools` (0.12.1,
+  bedtools 2.31.1) and `pyranges` (0.1.7) classify all 43,465 peaks identically --
+  100.0000% pairwise. Timing is comparable (44 / 53 / 48 s including GTF parsing),
+  so the backend choice is about available tooling, not correctness.
+
+## 0.3.0
 
 ### Fixed
 

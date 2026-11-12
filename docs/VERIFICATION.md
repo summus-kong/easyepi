@@ -259,11 +259,12 @@ H3K4me3 is a promoter-associated mark but by no means promoter-exclusive. The
 measured 29.2% promoter, 33.6% intronic, 19.7% intergenic distribution is the shape
 the literature reports for this mark, and it is produced by the same run.
 
-### Not yet done
+### Still open
 
-The `--backend pybedtools` and `--backend pyranges` paths are still untested
-against a reference implementation. Only the `native` backend is covered by the
-benchmark above.
+The 0.4.0 agreement figures are short of the 93% / 98% thresholds. Reaching them
+needs the remaining `Promoter -> Intron/Exon` cases resolved, which is about how
+the nearest transcript is chosen when several are within the window, not about
+the transcript model itself.
 
 ## ChIPseeker benchmark, 0.3.0 — **does not meet the threshold**
 
@@ -313,10 +314,12 @@ transcripts 916865-921016, 916870-919692, 917370-918534,
             917563-925585, 917573-919306
 ```
 
-A peak at chr1:940534 is 0 bp from a ChIPseeker TSS and 15,099 bp from easyepi's.
-Genes with a long 3' tail, or a `gene` span wider than any transcript, push the
-single TSS far from the real ones; multiply that over 78,941 genes with 646,577
-transcripts and the Promoter bin loses half its content.
+A peak at chr1:940534 is 0 bp from a ChIPseeker TSS and 15,099 bp from the
+single TSS of the gene easyepi assigned it to. That figure is a per-peak
+distance, not a model error: for this particular gene the single TSS (925,613)
+happens to sit 1 bp from its nearest transcript start. The error shows up
+across genes -- 35,318 of 78,941 genes have more than one transcript, one has
+522 -- where a single TSS cannot represent starts that are kilobases apart.
 
 ### Verdict
 
@@ -331,3 +334,57 @@ Promoter fraction roughly doubles. It is deliberately **not** done in 0.3.0, bec
 it needs its own before/after record and its own re-run of this benchmark.
 
 Reproduce with `bench/build_txdb.R`, `bench/run_chipseeker.R` and `bench/compare.py`.
+
+## 0.4.0 — per-transcript TSS, and the benchmark re-run
+
+The 0.3.0 benchmark failed at 57.66% exact agreement. Its stated cause was that
+`_read_gtf_txs` gave each gene one TSS while ChIPseeker uses one per transcript.
+That is now fixed and the benchmark re-run under identical conditions (same TxDb
+from GENCODE v50, same 43,465 peaks, same 3000 bp window).
+
+| metric | 0.3.0 | 0.4.0 | threshold | verdict |
+| --- | --- | --- | --- | --- |
+| per-peak exact agreement | 57.66% | **80.39%** | >= 93% | still short |
+| coarse agreement | 59.19% | **81.61%** | >= 98% | still short |
+| max per-bin delta | 36.15 pp | **14.10 pp** | <= 2 pp | still short |
+
+| bin | ChIPseeker | 0.3.0 | 0.4.0 |
+| --- | --- | --- | --- |
+| Promoter | 65.37% | 29.22% | 51.27% |
+| 5'UTR | 0.10% | 4.26% | 1.70% |
+| 3'UTR | 1.58% | 0.63% | 1.52% |
+| Exon | 1.61% | 12.63% | 5.34% |
+| Intron | 21.62% | 33.61% | 23.83% |
+| Intergenic | 9.72% | 19.65% | 16.35% |
+
+Exact agreement rises 22.7 points. The residual disagreements are dominated by
+`Promoter -> Intron` (2,338) and `Promoter -> Exon` (1,790): cases where both sides
+find a nearby transcript start but disagree about whether the peak's midpoint is
+inside the promoter window, or where they pick a different nearest transcript. The
+easyepi Promoter set is still a subset of ChIPseeker's.
+
+### Downstream folding re-checked
+
+ChIPseeker reports 19 `Downstream` peaks out of 43,465 (0.04%). easyepi has no such
+bin and folds them into `Intergenic`. At that share the folding cannot move any
+aggregate by more than 0.04 pp, so it is not a factor in the disagreement.
+
+### Backend cross-check
+
+All three annotation backends were run over the same 43,465 peaks and the same
+transcript table:
+
+| backend | version | time | agreement with native |
+| --- | --- | --- | --- |
+| native | built in | 44.1 s | reference |
+| pybedtools | 0.12.1 / bedtools 2.31.1 | 53.1 s | **100.0000%** (43465/43465) |
+| pyranges | 0.1.7 | 47.9 s | **100.0000%** (43465/43465) |
+
+Pairs: native-vs-pybedtools 43,465/43,465 and native-vs-pyranges
+43,465/43,465, both exactly 100.0000%, zero mismatches. The backends are therefore
+interchangeable for correctness; choosing one is about which dependency is
+available, not about the result. Timings include GTF parsing and are within 20% of
+each other.
+
+Both optional backends were installed with micromamba from `conda-forge`/`bioconda`
+(`pybedtools`, `bedtools`, `pyranges`); `pip` cannot reach PyPI from this host.

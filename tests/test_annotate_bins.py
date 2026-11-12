@@ -280,3 +280,97 @@ def test_exon_only_gene_still_classifies_exons():
     tx = _tx(cds=[])
     assert _classify([(9450, 9550)], tx=tx, promoter_upstream=0,
                      promoter_downstream=0) == ["Exon"]
+
+
+# ------------------------------------------------ per-transcript TSS model (0.4.0)
+def test_gtf_parser_keys_on_transcript_not_gene(tmp_path):
+    """One record per transcript, carrying its gene id.
+
+    Keying on ``gene_id`` gave every gene a single TSS, which is what made the
+    Promoter bin 29% instead of 65% against ChIPseeker.
+    """
+    from easyepi.annotate import _read_gtf_txs
+
+    gtf = tmp_path / "mini.gtf"
+    gtf.write_text(
+        'chr1\tsrc\tgene\t1001\t9000\t.\t+\t.\tgene_id "G1"; gene_name "A";\n'
+        'chr1\tsrc\ttranscript\t1001\t5000\t.\t+\t.\tgene_id "G1"; transcript_id "T1";\n'
+        'chr1\tsrc\texon\t1001\t2000\t.\t+\t.\tgene_id "G1"; transcript_id "T1";\n'
+        'chr1\tsrc\tCDS\t1501\t2000\t.\t+\t.\tgene_id "G1"; transcript_id "T1";\n'
+        'chr1\tsrc\ttranscript\t7001\t9000\t.\t+\t.\tgene_id "G1"; transcript_id "T2";\n'
+        'chr1\tsrc\texon\t7001\t9000\t.\t+\t.\tgene_id "G1"; transcript_id "T2";\n',
+        encoding="utf-8")
+
+    txs = _read_gtf_txs(str(gtf))
+    assert len(txs) == 2, [t["transcript_id"] for t in txs]
+    assert {t["transcript_id"] for t in txs} == {"T1", "T2"}
+    assert {t["gene_id"] for t in txs} == {"G1"}
+    by_tx = {t["transcript_id"]: t for t in txs}
+    # each transcript's own start, not the gene's
+    assert by_tx["T1"]["tss"] == 1000
+    assert by_tx["T2"]["tss"] == 7000
+    # the gene span is still available for output
+    assert by_tx["T1"]["gene_start"] == 1000
+    assert by_tx["T1"]["gene_end"] == 9000
+
+
+def test_multiple_transcripts_widen_the_promoter_bin(tmp_path):
+    """Two isoforms starting 6 kb apart must produce two promoter regions."""
+    from easyepi.annotate import _read_gtf_txs
+
+    gtf = tmp_path / "mini.gtf"
+    gtf.write_text(
+        'chr1\tsrc\tgene\t1001\t9000\t.\t+\t.\tgene_id "G1";\n'
+        'chr1\tsrc\ttranscript\t1001\t5000\t.\t+\t.\tgene_id "G1"; transcript_id "T1";\n'
+        'chr1\tsrc\texon\t1001\t5000\t.\t+\t.\tgene_id "G1"; transcript_id "T1";\n'
+        'chr1\tsrc\ttranscript\t7001\t9000\t.\t+\t.\tgene_id "G1"; transcript_id "T2";\n'
+        'chr1\tsrc\texon\t7001\t9000\t.\t+\t.\tgene_id "G1"; transcript_id "T2";\n',
+        encoding="utf-8")
+
+    fsets = _make_tx_feature_sets(_read_gtf_txs(str(gtf)))
+    starts = sorted(fsets["Promoter"][1].tolist())
+    assert len(starts) == 2, starts
+    # The whole point of the change: a peak at T2's start is a promoter. Under the
+    # old one-TSS-per-gene model only the region around 1,000 existed and this peak
+    # fell outside it.
+    starts_arr = np.array([7050], dtype=np.int64)
+    ends_arr = np.array([7150], dtype=np.int64)
+    chroms = np.array(["chr1"], dtype=object)
+    labels, _ = classify_peaks_to_genomic_bins(chroms, starts_arr, ends_arr, fsets,
+                                               mode="midpoint")
+    assert labels[0] == "Promoter", labels
+
+
+def test_minus_strand_transcript_tss_uses_the_right_edge(tmp_path):
+    from easyepi.annotate import _read_gtf_txs
+
+    gtf = tmp_path / "mini.gtf"
+    gtf.write_text(
+        'chr1\tsrc\tgene\t1001\t5000\t.\t-\t.\tgene_id "G1";\n'
+        'chr1\tsrc\ttranscript\t1001\t5000\t.\t-\t.\tgene_id "G1"; transcript_id "T1";\n'
+        'chr1\tsrc\texon\t1001\t2000\t.\t-\t.\tgene_id "G1"; transcript_id "T1";\n'
+        'chr1\tsrc\texon\t4001\t5000\t.\t-\t.\tgene_id "G1"; transcript_id "T1";\n',
+        encoding="utf-8")
+
+    (tx,) = _read_gtf_txs(str(gtf))
+    # Minus strand: the transcript starts at the right-hand end. exons are stored
+    # 0-based half-open, so the rightmost exon ends at 5000 and that is the TSS.
+    assert tx["tss"] == 5000
+    assert tx["tes"] == 1000
+
+
+def test_gtf_without_transcript_lines_still_parses(tmp_path):
+    """GFF3-style exon-only annotation degrades to one unit per gene."""
+    from easyepi.annotate import _read_gtf_txs
+
+    gtf = tmp_path / "mini.gff3"
+    gtf.write_text(
+        'chr1\tsrc\tgene\t1001\t5000\t.\t+\t.\tgene_id "G1";\n'
+        'chr1\tsrc\texon\t1001\t2000\t.\t+\t.\tgene_id "G1";\n'
+        'chr1\tsrc\texon\t4001\t5000\t.\t+\t.\tgene_id "G1";\n',
+        encoding="utf-8")
+
+    txs = _read_gtf_txs(str(gtf))
+    assert len(txs) == 1
+    assert txs[0]["gene_id"] == "G1"
+    assert len(txs[0]["exons"]) == 2
