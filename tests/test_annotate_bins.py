@@ -374,3 +374,65 @@ def test_gtf_without_transcript_lines_still_parses(tmp_path):
     assert len(txs) == 1
     assert txs[0]["gene_id"] == "G1"
     assert len(txs[0]["exons"]) == 2
+
+
+# ------------------------------------------- sweep correctness (the 0.5.1 bug)
+def test_overlap_scan_finds_a_feature_that_starts_before_but_ends_after():
+    """A feature nested inside a later-starting one must still be found.
+
+    The classifier sorted features by start and then binary-searched the *end* list,
+    which is not sorted. The returned position was meaningless, so the scan started
+    somewhere arbitrary and skipped overlapping features -- 2,598 peaks were lost on
+    a 43,465-peak benchmark (93.78% -> 99.76% once fixed). This case is small enough
+    that the wrong start index provably misses the answer.
+    """
+    # Intervals deliberately sorted by start but with ends out of order: the first
+    # one is long, the later ones are short.
+    feature_sets = {
+        "Intron": (np.array(["chr1", "chr1", "chr1"], dtype=object),
+                   np.array([100, 300, 500]),
+                   np.array([9000, 400, 600]),   # ends: 9000, 400, 600 (unsorted)
+                   np.array(["+", "+", "+"], dtype=object)),
+    }
+    # A peak at 4,000-4,100 overlaps only the long first interval.
+    labels, _ = classify_peaks_to_genomic_bins(
+        np.array(["chr1"], dtype=object), np.array([4000]), np.array([4100]),
+        feature_sets, mode="overlap")
+    assert labels[0] == "Intron", labels
+
+
+def test_overlap_scan_is_independent_of_feature_order():
+    """Shuffling the feature list must not change the answer."""
+    rng = np.random.default_rng(7)
+    n = 60
+    starts = rng.integers(0, 5000, n)
+    lengths = rng.integers(50, 900, n)
+    ends = starts + lengths
+    chroms = np.array(["chr1"] * n, dtype=object)
+    strands = np.array(["+"] * n, dtype=object)
+
+    peaks_c = np.array(["chr1"] * 200, dtype=object)
+    peaks_s = rng.integers(0, 5500, 200)
+    peaks_e = peaks_s + rng.integers(50, 300, 200)
+
+    base, _ = classify_peaks_to_genomic_bins(
+        peaks_c, peaks_s, peaks_e,
+        {"Intron": (chroms, starts, ends, strands)}, mode="overlap")
+
+    order = rng.permutation(n)
+    shuffled, _ = classify_peaks_to_genomic_bins(
+        peaks_c, peaks_s, peaks_e,
+        {"Intron": (chroms[order], starts[order], ends[order], strands[order])},
+        mode="overlap")
+    assert (base == shuffled).all(), int((base != shuffled).sum())
+
+
+def test_no_feature_overlapping_a_peak_leaves_it_unassigned():
+    feature_sets = {
+        "Intron": (np.array(["chr1"], dtype=object), np.array([100]),
+                   np.array([200]), np.array(["+"], dtype=object)),
+    }
+    labels, _ = classify_peaks_to_genomic_bins(
+        np.array(["chr1"], dtype=object), np.array([900]), np.array([950]),
+        feature_sets, mode="overlap")
+    assert labels[0] == "Intergenic", labels

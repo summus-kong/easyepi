@@ -451,3 +451,54 @@ installation on the same TxDb, not from reading documentation. Two earlier claim
 this file were corrected by that process: the TSS level is `"transcript"` (not
 `"gene"`), and the 15,099 bp figure quoted for one gene was a per-peak distance, not
 a model error.
+
+## 0.5.1 — the sweep bug behind the last 6%, and 99.76%
+
+0.5.0 reached 93.78% and blamed the remaining 6.22% on intron modelling. That
+attribution was wrong.
+
+A diagnostic on the 1,786 `Intron -> Intergenic` peaks showed every one of them
+**does** overlap an intron interval this code builds (1,786/1,786) and lies inside a
+transcript span (100%). Classifying one of those peaks against the intron set alone
+returned `Intron`; classifying the same peak against the full feature set returned
+`Intergenic`. The features were right and the scan was wrong.
+
+The cause was in the overlap sweep:
+
+```python
+feats.sort(key=lambda x: (x[0], x[1], x[2]))   # sorted by START
+k = bisect.bisect_left(ends, qs)               # binary search on ENDS
+```
+
+`ends` follows the start order, so it is not sorted, and `bisect_left` on an
+unsorted list returns an arbitrary position. The scan began there and skipped
+overlapping features, which silently dropped peaks from every bin.
+
+The fix bounds the scan by `bisect_left(starts, qe)` -- sound, because `starts` is
+the sort key -- and prunes with a running maximum of `ends`, which is monotone by
+construction.
+
+| metric | 0.5.0 | 0.5.1 |
+| --- | --- | --- |
+| per-peak exact agreement | 93.78% | **99.76%** |
+| disagreeing peaks | 2,703 | **105** |
+
+The 105 remaining are all UTR-versus-Exon boundary cases:
+
+| ChIPseeker | easyepi | peaks |
+| --- | --- | --- |
+| 3'UTR | Exon | 91 |
+| 5'UTR | Exon | 10 |
+| Exon | 3'UTR | 4 |
+
+These come from UTR provenance, not from the scan: ChIPseeker reads
+`fiveUTRsByTranscript`/`threeUTRsByTranscript` from the TxDb, while this code derives
+UTRs by subtracting CDS from exons. The two disagree where a transcript has a gapped
+CDS or a retained intron, which is exactly the 0.21% shown above. Closing it means
+reading the UTR records rather than computing them.
+
+All three backends remain identical at 99.76% and 100.0000% against each other.
+
+A regression test now covers the scan directly: a long interval whose start comes
+first and ends after later, shorter ones -- a list whose `ends` is unsorted -- plus a
+shuffle-invariance check.

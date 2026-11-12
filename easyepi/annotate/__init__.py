@@ -502,14 +502,27 @@ def classify_peaks_to_genomic_bins(peaks_chrom, peaks_start, peaks_end,
         ends = [f[1] for f in feats]
         priorities = [f[2] for f in feats]
         bins = [f[3] for f in feats]
+        # ``feats`` is sorted by start, so ``ends`` is NOT sorted and cannot be
+        # searched with bisect. A running maximum does give a sound lower bound
+        # for the scan: once the largest end seen so far is <= qs, no feature
+        # earlier in the list can reach qs any more.
+        running_max_end = []
+        _m = -1
+        for _e in ends:
+            _m = _e if _e > _m else _m
+            running_max_end.append(_m)
         for qi in by_chrom.get(chrom, []):
             qs = int(peaks_start[qi]); qe = int(peaks_end[qi])
             qmid = (qs + qe) / 2
             best = None  # (priority, bin_name)
-            k = bisect.bisect_left(ends, qs)  # first feature with end > qs
-            for idx in range(max(0, k - 1), len(feats)):
-                if starts[idx] >= qe:
-                    break
+            # First index whose start is >= qs: everything before it may still
+            # overlap, everything from it onwards starts at or after the peak.
+            hi = bisect.bisect_left(starts, qe)
+            for idx in range(hi):
+                if running_max_end[idx] <= qs:
+                    # No feature up to here ends after the peak starts, so none
+                    # of them can overlap. Safe to skip forward.
+                    continue
                 if ends[idx] <= qs:
                     continue
                 ov_s = max(starts[idx], qs); ov_e = min(ends[idx], qe)

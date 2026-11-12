@@ -1,6 +1,32 @@
 # Changelog
 
-## 0.5.0 - unreleased
+## 0.5.1 - unreleased
+
+### Fixed
+
+- **The overlap sweep searched an unsorted list.** Features were sorted by start, then
+  the *end* list was passed to `bisect.bisect_left` to find where a peak's scan should
+  begin. `ends` follows the start order and is therefore not sorted, so the returned
+  position was arbitrary and overlapping features were skipped -- dropping peaks from
+  every bin without any error. The scan is now bounded by `bisect_left(starts, qe)`,
+  which is sound because start is the sort key, and pruned with a running maximum of
+  ends.
+
+  **Agreement with ChIPseeker goes 93.78% -> 99.76%**; the number of disagreeing peaks
+  falls from 2,703 to 105. Three backends remain identical to each other at 100.0000%.
+
+- Corrects the 0.5.0 attribution. That release blamed the residual 6.22% on intron
+  modelling; every one of the 1,786 `Intron -> Intergenic` peaks actually does overlap
+  an intron interval this code builds, and the cause was the scan, not the features.
+
+### Known gap
+
+105 peaks (0.24%) still differ, all UTR-versus-Exon boundaries: 3'UTR->Exon 91,
+5'UTR->Exon 10, Exon->3'UTR 4. ChIPseeker reads `fiveUTRsByTranscript` and
+`threeUTRsByTranscript` from the TxDb; this code derives UTRs by subtracting CDS from
+exons, and the two disagree for transcripts with a gapped CDS or a retained intron.
+
+## 0.5.0
 
 ### Fixed
 
