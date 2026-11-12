@@ -1,6 +1,6 @@
 # Commands
 
-`easyepi` exposes 28 subcommands. Each one reads files and writes
+`easyepi` exposes 29 subcommands. Each one reads files and writes
 files; none requires another to have run first.
 
 | Command | Purpose |
@@ -21,6 +21,7 @@ files; none requires another to have run first.
 | `differential-peaks` | show this help message and exit |
 | `histone-states` | show this help message and exit |
 | `diff` | show this help message and exit |
+| `concordance` | show this help message and exit |
 | `viz` | show this help message and exit |
 | `meta` | show this help message and exit |
 | `validate-project` | show this help message and exit |

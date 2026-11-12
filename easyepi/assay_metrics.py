@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Sequence
 
 from easyepi.assays import AssayError, canonical_assay
 
@@ -357,7 +357,10 @@ def beta_distribution(table: Iterable[float]) -> dict[str, Any]:
 
 
 ASSAY_METRIC_BUILDERS: dict[str, tuple[str, ...]] = {
-    "atac-qc": ("fragments", "frip", "enrichment"),
+    # ATAC QC gains tss_enrichment: the signal-to-background ratio at transcription
+    # start sites, which is how an ATAC library is judged before any peak is
+    # called. It needs a TSS table, so it is opt-in via tss_rows.
+    "atac-qc": ("fragments", "frip", "enrichment", "tss_enrichment"),
     "chip-qc": ("frip", "enrichment"),
     "histone-qc": ("frip", "enrichment"),
     "mnase-qc": ("periodicity", "fragments"),
@@ -383,7 +386,9 @@ def _metric_key(assay: str) -> str:
 
 def compute_assay_metrics(assay: str, *, bam: str | None = None, bigwig: str | None = None,
                           peak: str | None = None, methylation_values: Iterable[float] | None = None,
-                          max_reads: int = 200_000) -> dict[str, Any]:
+                          max_reads: int = 200_000,
+                          tss_rows: Sequence[tuple[str, int, str]] | None = None,
+                          tss_flank: int = 2000) -> dict[str, Any]:
     """Compute the metric set that is meaningful for ``assay``.
 
     Returns a flat dict so it can be merged directly into the QC row.
@@ -424,6 +429,28 @@ def compute_assay_metrics(assay: str, *, bam: str | None = None, bigwig: str | N
         if "signal_enrichment" in enr:
             out["signal_enrichment"] = enr["signal_enrichment"]
             out["mean_signal_in_peaks"] = enr["mean_signal_in_peaks"]
+    if "tss_enrichment" in wanted and bam and tss_rows:
+        from .tss_enrichment import tss_enrichment
+
+        # Reported whether or not it clears a threshold: the score is the
+        # evidence, and a low one is a finding rather than a reason to omit the
+        # key and let a downstream reader assume it passed.
+        tss_res = tss_enrichment(bam, tss_rows, flank=tss_flank, max_reads=max_reads)
+        out["tss_enrichment_detail"] = tss_res
+        score = tss_res.get("tss_enrichment_score")
+        if score is not None:
+            out["tss_enrichment"] = score
+        else:
+            # No ratio could be formed. Carry the status through so a verdict can
+            # tell "measured and failed" from "never measured": a sparse library
+            # with zero flanking pileup must not read as a sample where --tss was
+            # simply not given.
+            out["tss_enrichment_status"] = tss_res.get("tss_enrichment_status")
+            # A zero ratio is the worst possible outcome, so it is scored as 0.0
+            # rather than as absent -- 0 can breach a floor threshold, None cannot.
+            if tss_res.get("tss_enrichment_status") in ("background_zero",
+                                                         "no_signal"):
+                out["tss_enrichment"] = 0.0
     if "beta" in wanted and methylation_values is not None:
         b = beta_distribution(methylation_values)
         out["beta_detail"] = b

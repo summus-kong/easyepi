@@ -46,6 +46,8 @@ MINIMAL_EXAMPLE: dict[str, str] = {
     "integrate": "easyepi integrate --gene-bed genes.bed --track S=a.bw --out int/",
     "normalize": "easyepi normalize --matrix counts.tsv --factors f.tsv --out norm.tsv",
     "diff": "easyepi diff --counts counts.tsv --design design.tsv --method deseq2 --out diff/deseq2.tsv",
+    "concordance": "easyepi concordance --peaks A1=peaks/A1.bed,A2=peaks/A2.bed "
+                   "--design design.tsv --out conc/",
     "viz": "easyepi viz --regions regions.bed --out viz/ --figure-format pdf",
     "washu": "easyepi washu --manifest tracks.tsv --out washu/",
     "init": "easyepi init /data/bams --out project.toml",
@@ -266,6 +268,14 @@ def _cmd_diff(args):
     return result
 
 
+def _cmd_concordance(args):
+    from easyepi.concordance_cli import run_concordance
+
+    result = run_concordance(args)
+    _render_cli_figures("concordance", args)
+    return result
+
+
 def _cmd_viz(args):
     from easyepi.viz import run_viz
     return run_viz(args)
@@ -445,6 +455,15 @@ def build_parser() -> argparse.ArgumentParser:
     # Assay is optional: when omitted the command stays a generic BAM summary.
     # The choices are listed so `--help` shows them and argparse rejects a typo,
     # which is what used to produce a report with an empty assay_qc.
+    # TSS enrichment: opt-in, because it needs a TSS table and a different
+    # reference than the other metrics. A gene-level table and a transcript-level
+    # table give materially different scores, so the caller supplies the file
+    # rather than having one guessed from a GTF.
+    p_qc.add_argument("--tss", default=None,
+                      help="TSV of transcription start sites (chrom, tss[, strand]) "
+                           "for TSS enrichment; requires --bam and an ATAC assay")
+    p_qc.add_argument("--tss-flank", type=int, default=2000,
+                      help="half-width of the TSS window in bp (default 2000)")
     p_qc.add_argument("--assay", default=None, choices=list(ASSAY_CHOICES_FOR_CLI),
                       help="assay label: atac, chip, histone, mnase or "
                            "methylation; CUT&Tag/CUT&RUN and common synonyms are "
@@ -767,6 +786,39 @@ def build_parser() -> argparse.ArgumentParser:
                    help="output TSV for the comparison table")
     add_figure_args(p_df)
     p_df.set_defaults(func=_cmd_diff)
+
+    p_cc = sub.add_parser(
+        "concordance",
+        help="replicate concordance: correlation and region overlap across samples")
+    # Two mutually exclusive input layers rather than two commands: peak files
+    # give correlation and Jaccard, a count matrix gives correlation only, and
+    # the output shape is identical, so one command with one output contract is
+    # less to learn than two.
+    p_cc.add_argument("--peaks", action="append", default=None, nargs="+",
+                      help="SAMPLE=peakfile (or a bare path, taking the sample id "
+                           "from the filename); repeatable and/or comma-separated. "
+                           "Enables Jaccard as well as correlation")
+    p_cc.add_argument("--matrix", default=None,
+                      help="features x samples TSV (first column: feature id), the "
+                           "same layout as `diff --counts`; correlation only")
+    p_cc.add_argument("--design", required=True,
+                      help="design TSV with sample_id and group/condition")
+    p_cc.add_argument("--method", default="spearman",
+                      choices=["spearman", "pearson"],
+                      help="correlation method (default: spearman)")
+    p_cc.add_argument("--min-samples", type=int, default=2, dest="min_samples",
+                      help="refuse to run with fewer samples than this (default 2)")
+    p_cc.add_argument("--out", required=True,
+                      help="output directory for concordance.json, "
+                           "concordance_pairs.tsv and figures")
+    p_cc.add_argument("--verbose", action="store_true",
+                      help="write detailed logs/run.log")
+    p_cc.add_argument("--log-file", default=None,
+                      help="optional detailed log file path")
+    p_cc.add_argument("--quiet", action="store_true",
+                      help="disable panel log output")
+    add_figure_args(p_cc)
+    p_cc.set_defaults(func=_cmd_concordance)
 
     p_vz = sub.add_parser("viz", help="visualization")
     p_vz.add_argument("--regions", required=True)

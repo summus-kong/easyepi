@@ -124,6 +124,8 @@ def build_sample_payload(assay: str | None, *,
                          peak: Any = None,
                          methylation: Any = None,
                          annotation: Any = None,
+                         tss_rows: Any = None,
+                         tss_flank: int = 2000,
                          blacklist: Any = None,
                          bam_qc: Mapping[str, Any] | None = None,
                          max_reads: int = 200_000,
@@ -174,6 +176,8 @@ def build_sample_payload(assay: str | None, *,
             peak=peak_path,
             methylation_values=beta_values,
             max_reads=max_reads,
+            tss_rows=tss_rows,
+            tss_flank=int(tss_flank),
         ))
     except Exception as exc:
         payload["assay_error"] = f"{type(exc).__name__}: {exc}"

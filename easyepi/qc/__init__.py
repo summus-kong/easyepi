@@ -55,6 +55,17 @@ def run_qc(args) -> int:
         result["assay"] = assay
     rows: list[dict] = []
 
+    # Loaded once for the whole run: a TSS table is identical for every sample, and
+    # re-parsing it per sample would dominate the runtime of a small cohort.
+    _tss_rows = None
+    _tss_path = getattr(args, "tss", None)
+    if _tss_path:
+        from ..tss_enrichment import read_tss_table
+
+        _tss_rows = read_tss_table(_tss_path)
+        print(f"[easyepi] TSS enrichment: {len(_tss_rows)} start sites "
+              f"from {_tss_path}")
+
     for sample_id, tracks in inputs.items():
         bam = tracks.get("bam")
         bigwig = tracks.get("bigwig")
@@ -74,6 +85,8 @@ def run_qc(args) -> int:
                 bam_qc=summary,
                 max_reads=getattr(args, "max_reads", 200000),
                 rules=rules,
+                tss_rows=_tss_rows,
+                tss_flank=int(getattr(args, "tss_flank", 2000)),
             )
             metrics["assay_qc"] = built["assay_qc"]
             metrics["qc_verdict"] = built["qc_verdict"]

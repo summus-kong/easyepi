@@ -112,6 +112,8 @@ data. Positioning accuracy against a published caller is not established.
 | --- | --- |
 | Full suite on Linux (`pytest tests -q`) | **278 passed**, 0 failed |
 | CLI subcommands | 25; `gene-panel` added |
+| CLI subcommands (v0.6.0) | 29; `concordance` added |
+| Tests (v0.6.0) | `603 passed` |
 | Real-data gene panel | 4 marks x 4 chr1 loci from ENCODE bigWigs + GENCODE v50 GTF, rendered and visually inspected |
 | Figure defects found by inspection | missing coordinate ticks, over-flattened shared y-limits, exon boxes too thin to see |
 

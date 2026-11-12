@@ -76,6 +76,7 @@ nav:
       - dmr: commands/dmr.md
       - differential-peaks: commands/differential-peaks.md
       - diff: commands/diff.md
+      - concordance: commands/concordance.md
       - visualisation: commands/viz.md
   - API reference:
       - easyepi.assays: api/assays.md
@@ -91,6 +92,9 @@ nav:
       - easyepi.nucleosome_positioning: api/nucleosome_positioning.md
       - easyepi.viz.genomeviews: api/genomeviews.md
       - easyepi.viz.panels: api/panels.md
+      - easyepi.tss_enrichment: api/tss_enrichment.md
+      - easyepi.annotation_tss: api/annotation_tss.md
+      - easyepi.concordance: api/concordance.md
       - easyepi.formats: api/formats.md
       - easyepi.errors: api/errors.md
   - Reference:

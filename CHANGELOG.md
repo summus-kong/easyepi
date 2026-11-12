@@ -4,6 +4,37 @@
 
 ### Added
 
+- **`easyepi concordance`**: replicate concordance between samples, as a
+  subcommand. `--peaks` takes one peak file per sample and reports pairwise
+  correlation *and* region-set Jaccard; `--matrix` takes the `diff --counts`
+  layout and reports correlation only, because a count matrix has no genomic
+  coordinates. `--design` is required.
+
+  Two deliberate non-features: there is no pass/fail threshold and no
+  `qc_verdict` block. `grouping_supported` compares mean within-group against
+  mean between-group agreement and is a group-level statement -- measured on
+  synthetic designs with real group structure, swapping one label in six still
+  reports `True` -- so the command prints that caveat on every run. A value that
+  could not be computed is `null` in the JSON and an empty field in the TSV,
+  never `0`.
+
+- **TSS enrichment** (`easyepi qc --tss`, `easyepi/tss_enrichment.py`): the
+  ENCODE signal-to-background score at transcription start sites, piled up from
+  read 5' ends in an apportioned window (`--tss-flank`, default 2000 bp).
+  `--tss` accepts a GTF/GFF directly (`easyepi/annotation_tss.py` derives the
+  positions at transcript or gene level) as well as a `chrom/tss` table, so a
+  user does not have to build and maintain a second file that mirrors their
+  annotation.
+
+  Four states are reported rather than one nullable number: `measured`,
+  `background_zero`, `no_reads` and `no_tss`. A sparse library whose flanking
+  pileup is zero is *measured and failed*, not *never measured* -- those must not
+  look alike downstream, so `qc --assay atac` scores that case as `0.0` (which
+  can breach a floor threshold) instead of omitting the key.
+
+- Replicate concordance module (`easyepi/concordance.py`) with `json_safe`, which
+  converts NaN/inf to `null`. `json.dumps` otherwise emits a bare `NaN`, which is
+  not JSON and makes a whole report unreadable to a strict parser.
 - **`easyepi diff --method deseq2`**: negative-binomial count model via PyDESeq2
   0.5.4, replacing the rank/t-test path for designs where inference — not exploration
   — is wanted. It supports covariates (`--design-factors`), independent filtering, LFC

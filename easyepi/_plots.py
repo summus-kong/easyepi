@@ -509,6 +509,75 @@ def plot_peak_read_distribution(out_dir, title: str = "Reads per peak"):
     return fig
 
 
+def plot_correlation_heatmap(sample_ids, corr, groups=None,
+                             title: str = "Sample correlation"):
+    """Correlation matrix as a heatmap, ordered by design group.
+
+    No clustering is applied, deliberately. Clustering reorders the samples to
+    maximise block structure, which destroys the evidence a reader came for: the
+    question is whether the *design* groups form blocks, and a dendrogram will
+    produce blocks out of noise. Samples are therefore laid out group by group,
+    with separators drawn where the group changes, so a block that is present is
+    present in the labels as well as the colours.
+
+    ``corr`` is a square array with NaN allowed where a pair could not be formed;
+    NaN is drawn as a neutral grey rather than as an extreme value, because
+    "not computed" must not look like "correlation of -1".
+    """
+    plt = _mpl()
+    import numpy as np
+
+    values = np.asarray(corr, dtype=float)
+    if values.ndim != 2 or values.shape[0] != values.shape[1]:
+        return None
+    n = values.shape[0]
+    if n < 2:
+        return None
+
+    # Order by group, preserving the caller's group order and the input order
+    # inside each group.
+    order = list(range(n))
+    if groups:
+        labels = [str(groups.get(s, "")) for s in sample_ids]
+        seen = []
+        for label in labels:
+            if label not in seen:
+                seen.append(label)
+        order = sorted(order, key=lambda i: (seen.index(labels[i]), i))
+    ordered = values[np.ix_(order, order)]
+    ordered_ids = [sample_ids[i] for i in order]
+
+    masked = np.ma.masked_invalid(ordered)
+    cmap = plt.get_cmap("viridis").copy()
+    cmap.set_bad("#d9d9d9")
+
+    fig, ax = plt.subplots(figsize=(max(4.0, 0.55 * n + 2.0),
+                                    max(3.5, 0.55 * n + 1.5)))
+    image = ax.imshow(masked, cmap=cmap, vmin=-1.0, vmax=1.0)
+    ax.set_xticks(range(n))
+    ax.set_yticks(range(n))
+    ax.set_xticklabels(ordered_ids, rotation=45, ha="right", fontsize=9)
+    ax.set_yticklabels(ordered_ids, fontsize=9)
+    ax.set_title(title)
+
+    # Group separators: a block boundary the reader can check against the labels.
+    if groups:
+        labels = [str(groups.get(s, "")) for s in ordered_ids]
+        for i in range(1, n):
+            if labels[i] != labels[i - 1]:
+                ax.axhline(i - 0.5, color="white", linewidth=1.4)
+                ax.axvline(i - 0.5, color="white", linewidth=1.4)
+
+    bar = fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
+    bar.set_label("correlation")
+    if np.isnan(ordered).any():
+        # Say what the grey means instead of leaving it to be guessed.
+        bar.ax.text(1.6, 0.5, "grey = not computed", transform=bar.ax.transAxes,
+                    rotation=90, va="center", fontsize=7, color="#555555")
+    fig.tight_layout()
+    return fig
+
+
 def plot_blacklist(frame, title: str = "Blacklist fraction"):
     """Bar chart of the fraction of reads in blacklist regions."""
     plt = _mpl()
@@ -578,6 +647,58 @@ def _assay_metric_frame(out_dir: Path):
 
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _concordance_heatmap(out_dir: Path, fig_dir: Path,
+                         formats: tuple[str, ...] = (DEFAULT_FIGURE_FORMAT,)) -> list[str]:
+    """Draw the pair table written by `easyepi concordance` as a matrix.
+
+    The table is long-form (one row per pair), so it has to be pivoted back into
+    a square before it can be drawn. A missing pair -- possible when a run was
+    truncated -- stays NaN and is drawn grey rather than being filled with a
+    plausible-looking value.
+    """
+    import numpy as np
+
+    path = out_dir / "concordance_pairs.tsv"
+    if not path.exists():
+        return []
+    try:
+        import pandas as pd
+
+        frame = pd.read_csv(path, sep="\t")
+    except Exception as exc:  # noqa: BLE001
+        _LOGGER.debug("concordance figure skipped: %s: %s", type(exc).__name__, exc)
+        return []
+    if frame.empty or not {"sample_a", "sample_b", "correlation"} <= set(frame.columns):
+        return []
+
+    ids = list(dict.fromkeys(list(frame["sample_a"]) + list(frame["sample_b"])))
+    index = {name: i for i, name in enumerate(ids)}
+    grid = np.full((len(ids), len(ids)), np.nan)
+    np.fill_diagonal(grid, 1.0)
+    for row in frame.itertuples(index=False):
+        rho = getattr(row, "correlation", None)
+        if rho is None or (isinstance(rho, float) and not np.isfinite(rho)):
+            continue
+        i, j = index[row.sample_a], index[row.sample_b]
+        grid[i, j] = grid[j, i] = float(rho)
+
+    # Group labels come from the pair table when it carries them.
+    groups = {}
+    if "group_a" in frame.columns:
+        for row in frame.itertuples(index=False):
+            ga = getattr(row, "group_a", None)
+            gb = getattr(row, "group_b", None)
+            if isinstance(ga, str) and ga:
+                groups.setdefault(row.sample_a, ga)
+            if isinstance(gb, str) and gb:
+                groups.setdefault(row.sample_b, gb)
+
+    fig = plot_correlation_heatmap(ids, grid, groups=groups or None)
+    if not fig:
+        return []
+    return _save(fig, fig_dir, "correlation_heatmap", formats=formats)
 
 
 def render_module_figures(module: str, out: str | Path,
@@ -709,6 +830,8 @@ def render_module_figures(module: str, out: str | Path,
             qc = next(((p, f) for p, f in tables if any(c in f.columns for c in ("sample_id", "mapping_rate", "n_intervals", "mean_beta"))), None)
             if qc:
                 made.extend(_bar(qc[1], fig_dir, "qc_metrics", formats=tuple(formats)))
+        if "concordance" in module_key:
+            made.extend(_concordance_heatmap(out_dir, fig_dir, formats=tuple(formats)))
         if "methylation" in module_key:
             profile = next(((p, f) for p, f in tables if "beta" in f.columns), None)
             if profile:
