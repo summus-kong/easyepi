@@ -1,6 +1,34 @@
 # Changelog
 
-## 0.4.0 - unreleased
+## 0.5.0 - unreleased
+
+### Fixed
+
+- **Promoter is now decided by distance to the nearest TSS, not by whether the peak
+  midpoint falls inside a +/-window interval.** ChIPseeker computes the distance from
+  the peak edge to the nearest resized TSS and marks `tssRegion[1] <= distance <=
+  tssRegion[2]` as Promoter, applied after the interval bins so it overrides them.
+  Testing that rule against ChIPseeker's own `distanceToTSS` column matched on
+  43,465/43,465 peaks with zero exceptions. Adopting it recovers 5,731 peaks that had
+  been missed -- all within the window by distance but outside it by midpoint.
+- The interval bins classify on **whole-peak overlap**, matching ChIPseeker's
+  `findOverlaps`, where a peak whose body reaches into a region counts.
+
+**Agreement with ChIPseeker rises from 80.39% to 93.78%**, crossing the 93% threshold
+set for this work. The Promoter bin goes from 22,282 to 27,623 peaks against
+ChIPseeker's 28,414. All three backends (`native`, `pybedtools`, `pyranges`) still
+agree 100.0000% with each other.
+
+### Known gap
+
+6.22% of peaks still differ, dominated by `Intron -> Intergenic` (1,786 peaks, 4.11%).
+Those peaks are a median 13.7 kb from the nearest TSS, so they lie inside a transcript
+ChIPseeker modelled and this implementation did not: ChIPseeker builds introns from
+its `intronsByTranscript` table rather than from gaps between the exon records read
+here, and 4.5% of GENCODE transcripts have a single exon. Closing it means deriving
+introns from transcript spans.
+
+## 0.4.0
 
 ### Changed
 

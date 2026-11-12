@@ -388,3 +388,66 @@ each other.
 
 Both optional backends were installed with micromamba from `conda-forge`/`bioconda`
 (`pybedtools`, `bedtools`, `pyranges`); `pip` cannot reach PyPI from this host.
+
+## 0.5.0 — Promoter by TSS distance, and 93.8% agreement
+
+0.4.0 reached 80.39%. The remaining gap was attributed by toggling one rule at a
+time against ChIPseeker's own output on the same 43,465 peaks:
+
+| rule under test | exact agreement |
+| --- | --- |
+| midpoint-in-interval + transcript TSS (0.4.0) | 80.45% |
+| whole-peak overlap + transcript TSS | 82.42% |
+| whole-peak overlap + gene TSS | 59.61% |
+| **whole-peak overlap + distance-to-TSS promoter** | **93.78%** |
+
+The decisive finding was mechanical rather than statistical: ChIPseeker decides
+Promoter from the *distance to the nearest TSS*, not from whether the peak's midpoint
+lies inside a +/-window interval. Testing that rule directly against ChIPseeker's
+own `distanceToTSS` column gave `(theirs == "Promoter") == (|distanceToTSS| <= 3000)`
+on **43,465 / 43,465 peaks** -- zero exceptions. Adopting it moved agreement from
+82.42% to 93.78% on its own; 5,731 peaks that had been missed were all within the
+window by distance but outside it by midpoint.
+
+The overlap rule contributes the other ~2 points: ChIPseeker calls
+`findOverlaps(peaks, region)` on the whole peak, so a peak whose body reaches into a
+region counts, not only one whose centre does.
+
+| metric | 0.3.0 | 0.4.0 | 0.5.0 | threshold |
+| --- | --- | --- | --- | --- |
+| per-peak exact agreement | 57.66% | 80.39% | **93.78%** | >= 93% |
+| Promoter calls | 12,701 | 22,282 | 27,623 | (ChIPseeker 28,414) |
+
+### What still disagrees (6.22%)
+
+| ChIPseeker | easyepi | peaks | share |
+| --- | --- | --- | --- |
+| Intron | Intergenic | 1,786 | 4.11% |
+| Promoter | 5'UTR | 421 | 0.97% |
+| Promoter | Exon | 342 | 0.79% |
+| 3'UTR | Exon | 92 | 0.21% |
+
+The largest residual is `Intron -> Intergenic`. Those peaks have a median distance
+to the nearest TSS of 13.7 kb, so they sit inside a transcript ChIPseeker modelled
+and this implementation did not: 29,034 of 646,577 transcripts (4.5%) have a single
+exon, and ChIPseeker's `intronsByTranscript` derives introns from the transcript
+table rather than from gaps between the exon records we read. Closing this needs the
+intron list built from transcript spans, not from exon gaps.
+
+The `Promoter -> 5'UTR` and `Promoter -> Exon` cases are ordering: ChIPseeker assigns
+interval bins first and lets Promoter override, which this now does too, so the
+remainder is a boundary or nearest-transcript choice difference.
+
+### Backends remain identical
+
+With the new rule in place all three backends still agree exactly: `native`,
+`pybedtools` 0.12.1 and `pyranges` 0.1.7 each score 40,762/43,465 (93.78%) against
+ChIPseeker and 100.0000% against each other.
+
+### Method note
+
+These figures come from differential testing against a real ChIPseeker 1.46.1
+installation on the same TxDb, not from reading documentation. Two earlier claims in
+this file were corrected by that process: the TSS level is `"transcript"` (not
+`"gene"`), and the 15,099 bp figure quoted for one gene was a per-peak distance, not
+a model error.
