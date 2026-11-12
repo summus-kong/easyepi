@@ -261,10 +261,10 @@ the literature reports for this mark, and it is produced by the same run.
 
 ### Still open
 
-The 0.4.0 agreement figures are short of the 93% / 98% thresholds. Reaching them
-needs the remaining `Promoter -> Intron/Exon` cases resolved, which is about how
-the nearest transcript is chosen when several are within the window, not about
-the transcript model itself.
+Superseded by the 0.5.0 section below, which reaches 93.78% by adopting
+ChIPseeker's distance-based Promoter rule. The remaining 6.22% is analysed there
+and is dominated by intron modelling, not by the transcript choice discussed in
+the earlier note.
 
 ## ChIPseeker benchmark, 0.3.0 — **does not meet the threshold**
 
