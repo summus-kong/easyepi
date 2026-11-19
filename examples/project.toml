@@ -1,0 +1,33 @@
+[project]
+project_id = "demo-epigenome"
+genome_build = "hg38"
+
+[references]
+genome = "references/hg38.fa"
+annotation = "references/gencode.v48.gtf"
+motif_database = "references/JASPAR2024_CORE.pfm"
+
+[defaults]
+# Stable per-sample defaults; pass run-specific options explicitly on the CLI.
+assay = "ATAC-seq"
+
+[[samples]]
+sample_id = "ATAC_T0"
+assay = "ATAC-seq"
+bam = "bams/ATAC_T0.bam"
+bigwig = "tracks/ATAC_T0.bw"
+peak = "peaks/ATAC_T0.narrowPeak"
+group = "time0"
+time = 0
+batch = "B1"
+
+[[samples]]
+sample_id = "ATAC_T24"
+assay = "ATAC-seq"
+bam = "bams/ATAC_T24.bam"
+bigwig = "tracks/ATAC_T24.bw"
+peak = "peaks/ATAC_T24.narrowPeak"
+group = "time24"
+time = 24
+batch = "B1"
+

@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+title: "Easyepi: unified bulk epigenomics downstream analysis suite"
+version: 0.1.0
+message: "If you use Easyepi, please cite this software and the underlying tools listed in the documentation."
+type: software
+authors:
+  - family-names: houwb
+    given-names: ""
+license: BSD-3-Clause

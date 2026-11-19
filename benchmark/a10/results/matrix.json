@@ -1,0 +1,1281 @@
+{
+  "matrix": {
+    "ee_txdb_full|cs_ucsc": {
+      "CS13-12383_H3K27ac": {
+        "n": 2974,
+        "label_agree": 2726,
+        "label_frac": 0.916611,
+        "dist_exact": 1050,
+        "dist_within_1": 1918,
+        "dist_within_10": 1921,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 103
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 86
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 40
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 15
+          },
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 3
+          }
+        ]
+      },
+      "CS13-12383_H3K27me3": {
+        "n": 709,
+        "label_agree": 638,
+        "label_frac": 0.899859,
+        "dist_exact": 245,
+        "dist_within_1": 432,
+        "dist_within_10": 432,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 27
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 24
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 17
+          },
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 1
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "5'UTR",
+            "n": 1
+          }
+        ]
+      },
+      "CS13-12383_H3K4me1": {
+        "n": 763,
+        "label_agree": 705,
+        "label_frac": 0.923984,
+        "dist_exact": 263,
+        "dist_within_1": 517,
+        "dist_within_10": 519,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 23
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 15
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 13
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 5
+          },
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 1
+          }
+        ]
+      },
+      "CS13-12383_H3K4me3": {
+        "n": 1888,
+        "label_agree": 1707,
+        "label_frac": 0.904131,
+        "dist_exact": 689,
+        "dist_within_1": 1205,
+        "dist_within_10": 1206,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 75
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 64
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 26
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 13
+          },
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 2
+          }
+        ]
+      },
+      "CS14-12408_H3K27ac": {
+        "n": 3003,
+        "label_agree": 2743,
+        "label_frac": 0.91342,
+        "dist_exact": 1129,
+        "dist_within_1": 1962,
+        "dist_within_10": 1968,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 112
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 86
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 40
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 18
+          },
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 3
+          }
+        ]
+      },
+      "CS14-12408_H3K27me3": {
+        "n": 1212,
+        "label_agree": 1095,
+        "label_frac": 0.903465,
+        "dist_exact": 437,
+        "dist_within_1": 753,
+        "dist_within_10": 754,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 47
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 41
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 22
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 4
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "5'UTR",
+            "n": 2
+          }
+        ]
+      },
+      "CS14-12408_H3K4me1": {
+        "n": 2201,
+        "label_agree": 2025,
+        "label_frac": 0.920036,
+        "dist_exact": 828,
+        "dist_within_1": 1482,
+        "dist_within_10": 1485,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 78
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 44
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 37
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 13
+          },
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 4
+          }
+        ]
+      },
+      "CS14-12408_H3K4me3": {
+        "n": 2178,
+        "label_agree": 1970,
+        "label_frac": 0.9045,
+        "dist_exact": 807,
+        "dist_within_1": 1404,
+        "dist_within_10": 1405,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 89
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 68
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 32
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 16
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Downstream",
+            "n": 1
+          }
+        ]
+      },
+      "CS16-12997_H3K27ac": {
+        "n": 3238,
+        "label_agree": 2961,
+        "label_frac": 0.914453,
+        "dist_exact": 1175,
+        "dist_within_1": 2109,
+        "dist_within_10": 2112,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 121
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 93
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 40
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 20
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "5'UTR",
+            "n": 1
+          }
+        ]
+      },
+      "CS16-12997_H3K27me3": {
+        "n": 909,
+        "label_agree": 824,
+        "label_frac": 0.906491,
+        "dist_exact": 330,
+        "dist_within_1": 558,
+        "dist_within_10": 558,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 33
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 33
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 15
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 3
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "5'UTR",
+            "n": 1
+          }
+        ]
+      },
+      "CS16-12997_H3K4me1": {
+        "n": 2484,
+        "label_agree": 2296,
+        "label_frac": 0.924316,
+        "dist_exact": 915,
+        "dist_within_1": 1679,
+        "dist_within_10": 1685,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 82
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 54
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 36
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 13
+          },
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 3
+          }
+        ]
+      },
+      "CS16-12997_H3K4me3": {
+        "n": 2087,
+        "label_agree": 1885,
+        "label_frac": 0.90321,
+        "dist_exact": 760,
+        "dist_within_1": 1337,
+        "dist_within_10": 1338,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 88
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 66
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 32
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 13
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Downstream",
+            "n": 1
+          }
+        ]
+      }
+    },
+    "ee_txdb_full|cs_gtf_full": {
+      "CS13-12383_H3K27ac": {
+        "n": 2974,
+        "label_agree": 1714,
+        "label_frac": 0.576328,
+        "dist_exact": 1622,
+        "dist_within_1": 2974,
+        "dist_within_10": 2974,
+        "top_disagreements": [
+          {
+            "easyepi": "Intron",
+            "chipseeker": "Exon",
+            "n": 1257
+          },
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 3
+          }
+        ]
+      }
+    },
+    "ee_txdb_full|cs_gtf_fixed": {
+      "CS13-12383_H3K27ac": {
+        "n": 2974,
+        "label_agree": 2971,
+        "label_frac": 0.998991,
+        "dist_exact": 1622,
+        "dist_within_1": 2974,
+        "dist_within_10": 2974,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 3
+          }
+        ]
+      },
+      "CS13-12383_H3K27me3": {
+        "n": 709,
+        "label_agree": 706,
+        "label_frac": 0.995769,
+        "dist_exact": 400,
+        "dist_within_1": 709,
+        "dist_within_10": 709,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 3
+          }
+        ]
+      },
+      "CS13-12383_H3K4me1": {
+        "n": 763,
+        "label_agree": 762,
+        "label_frac": 0.998689,
+        "dist_exact": 393,
+        "dist_within_1": 763,
+        "dist_within_10": 763,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 1
+          }
+        ]
+      },
+      "CS13-12383_H3K4me3": {
+        "n": 1888,
+        "label_agree": 1886,
+        "label_frac": 0.998941,
+        "dist_exact": 1051,
+        "dist_within_1": 1888,
+        "dist_within_10": 1888,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 2
+          }
+        ]
+      },
+      "CS14-12408_H3K27ac": {
+        "n": 3003,
+        "label_agree": 3000,
+        "label_frac": 0.999001,
+        "dist_exact": 1666,
+        "dist_within_1": 3003,
+        "dist_within_10": 3003,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 3
+          }
+        ]
+      },
+      "CS14-12408_H3K27me3": {
+        "n": 1212,
+        "label_agree": 1210,
+        "label_frac": 0.99835,
+        "dist_exact": 687,
+        "dist_within_1": 1212,
+        "dist_within_10": 1212,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 2
+          }
+        ]
+      },
+      "CS14-12408_H3K4me1": {
+        "n": 2201,
+        "label_agree": 2197,
+        "label_frac": 0.998183,
+        "dist_exact": 1178,
+        "dist_within_1": 2201,
+        "dist_within_10": 2201,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 4
+          }
+        ]
+      },
+      "CS14-12408_H3K4me3": {
+        "n": 2178,
+        "label_agree": 2175,
+        "label_frac": 0.998623,
+        "dist_exact": 1230,
+        "dist_within_1": 2178,
+        "dist_within_10": 2178,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 2
+          },
+          {
+            "easyepi": "Exon",
+            "chipseeker": "Intron",
+            "n": 1
+          }
+        ]
+      },
+      "CS16-12997_H3K27ac": {
+        "n": 3238,
+        "label_agree": 3237,
+        "label_frac": 0.999691,
+        "dist_exact": 1764,
+        "dist_within_1": 3238,
+        "dist_within_10": 3238,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 1
+          }
+        ]
+      },
+      "CS16-12997_H3K27me3": {
+        "n": 909,
+        "label_agree": 908,
+        "label_frac": 0.9989,
+        "dist_exact": 525,
+        "dist_within_1": 909,
+        "dist_within_10": 909,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 1
+          }
+        ]
+      },
+      "CS16-12997_H3K4me1": {
+        "n": 2484,
+        "label_agree": 2481,
+        "label_frac": 0.998792,
+        "dist_exact": 1328,
+        "dist_within_1": 2484,
+        "dist_within_10": 2484,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 3
+          }
+        ]
+      },
+      "CS16-12997_H3K4me3": {
+        "n": 2087,
+        "label_agree": 2084,
+        "label_frac": 0.998563,
+        "dist_exact": 1163,
+        "dist_within_1": 2087,
+        "dist_within_10": 2087,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 2
+          },
+          {
+            "easyepi": "Exon",
+            "chipseeker": "Intron",
+            "n": 1
+          }
+        ]
+      }
+    },
+    "ee_fixed|cs_ucsc": {
+      "CS13-12383_H3K27ac": {
+        "n": 2974,
+        "label_agree": 2726,
+        "label_frac": 0.916611,
+        "dist_exact": 1050,
+        "dist_within_1": 1918,
+        "dist_within_10": 1921,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 103
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 86
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 40
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 15
+          },
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 3
+          }
+        ]
+      },
+      "CS13-12383_H3K27me3": {
+        "n": 709,
+        "label_agree": 638,
+        "label_frac": 0.899859,
+        "dist_exact": 245,
+        "dist_within_1": 432,
+        "dist_within_10": 432,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 27
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 24
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 17
+          },
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 1
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "5'UTR",
+            "n": 1
+          }
+        ]
+      },
+      "CS13-12383_H3K4me1": {
+        "n": 763,
+        "label_agree": 705,
+        "label_frac": 0.923984,
+        "dist_exact": 263,
+        "dist_within_1": 517,
+        "dist_within_10": 519,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 23
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 15
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 13
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 5
+          },
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 1
+          }
+        ]
+      },
+      "CS13-12383_H3K4me3": {
+        "n": 1888,
+        "label_agree": 1707,
+        "label_frac": 0.904131,
+        "dist_exact": 689,
+        "dist_within_1": 1205,
+        "dist_within_10": 1206,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 75
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 64
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 26
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 13
+          },
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 2
+          }
+        ]
+      },
+      "CS14-12408_H3K27ac": {
+        "n": 3003,
+        "label_agree": 2743,
+        "label_frac": 0.91342,
+        "dist_exact": 1129,
+        "dist_within_1": 1962,
+        "dist_within_10": 1968,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 112
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 86
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 40
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 18
+          },
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 3
+          }
+        ]
+      },
+      "CS14-12408_H3K27me3": {
+        "n": 1212,
+        "label_agree": 1095,
+        "label_frac": 0.903465,
+        "dist_exact": 437,
+        "dist_within_1": 753,
+        "dist_within_10": 754,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 47
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 41
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 22
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 4
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "5'UTR",
+            "n": 2
+          }
+        ]
+      },
+      "CS14-12408_H3K4me1": {
+        "n": 2201,
+        "label_agree": 2025,
+        "label_frac": 0.920036,
+        "dist_exact": 828,
+        "dist_within_1": 1482,
+        "dist_within_10": 1485,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 78
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 44
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 37
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 13
+          },
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 4
+          }
+        ]
+      },
+      "CS14-12408_H3K4me3": {
+        "n": 2178,
+        "label_agree": 1970,
+        "label_frac": 0.9045,
+        "dist_exact": 807,
+        "dist_within_1": 1404,
+        "dist_within_10": 1405,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 89
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 68
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 32
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 16
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Downstream",
+            "n": 1
+          }
+        ]
+      },
+      "CS16-12997_H3K27ac": {
+        "n": 3238,
+        "label_agree": 2961,
+        "label_frac": 0.914453,
+        "dist_exact": 1175,
+        "dist_within_1": 2109,
+        "dist_within_10": 2112,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 121
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 93
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 40
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 20
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "5'UTR",
+            "n": 1
+          }
+        ]
+      },
+      "CS16-12997_H3K27me3": {
+        "n": 909,
+        "label_agree": 824,
+        "label_frac": 0.906491,
+        "dist_exact": 330,
+        "dist_within_1": 558,
+        "dist_within_10": 558,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 33
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 33
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 15
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 3
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "5'UTR",
+            "n": 1
+          }
+        ]
+      },
+      "CS16-12997_H3K4me1": {
+        "n": 2484,
+        "label_agree": 2296,
+        "label_frac": 0.924316,
+        "dist_exact": 915,
+        "dist_within_1": 1679,
+        "dist_within_10": 1685,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 82
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 54
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 36
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 13
+          },
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 3
+          }
+        ]
+      },
+      "CS16-12997_H3K4me3": {
+        "n": 2087,
+        "label_agree": 1885,
+        "label_frac": 0.90321,
+        "dist_exact": 760,
+        "dist_within_1": 1337,
+        "dist_within_10": 1338,
+        "top_disagreements": [
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Exon",
+            "n": 88
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intron",
+            "n": 66
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Intergenic",
+            "n": 32
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "3'UTR",
+            "n": 13
+          },
+          {
+            "easyepi": "Promoter",
+            "chipseeker": "Downstream",
+            "n": 1
+          }
+        ]
+      }
+    },
+    "ee_fixed|cs_gtf_full": {
+      "CS13-12383_H3K27ac": {
+        "n": 2974,
+        "label_agree": 1714,
+        "label_frac": 0.576328,
+        "dist_exact": 1622,
+        "dist_within_1": 2974,
+        "dist_within_10": 2974,
+        "top_disagreements": [
+          {
+            "easyepi": "Intron",
+            "chipseeker": "Exon",
+            "n": 1257
+          },
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 3
+          }
+        ]
+      }
+    },
+    "ee_fixed|cs_gtf_fixed": {
+      "CS13-12383_H3K27ac": {
+        "n": 2974,
+        "label_agree": 2971,
+        "label_frac": 0.998991,
+        "dist_exact": 1622,
+        "dist_within_1": 2974,
+        "dist_within_10": 2974,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 3
+          }
+        ]
+      },
+      "CS13-12383_H3K27me3": {
+        "n": 709,
+        "label_agree": 706,
+        "label_frac": 0.995769,
+        "dist_exact": 400,
+        "dist_within_1": 709,
+        "dist_within_10": 709,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 3
+          }
+        ]
+      },
+      "CS13-12383_H3K4me1": {
+        "n": 763,
+        "label_agree": 762,
+        "label_frac": 0.998689,
+        "dist_exact": 393,
+        "dist_within_1": 763,
+        "dist_within_10": 763,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 1
+          }
+        ]
+      },
+      "CS13-12383_H3K4me3": {
+        "n": 1888,
+        "label_agree": 1886,
+        "label_frac": 0.998941,
+        "dist_exact": 1051,
+        "dist_within_1": 1888,
+        "dist_within_10": 1888,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 2
+          }
+        ]
+      },
+      "CS14-12408_H3K27ac": {
+        "n": 3003,
+        "label_agree": 3000,
+        "label_frac": 0.999001,
+        "dist_exact": 1666,
+        "dist_within_1": 3003,
+        "dist_within_10": 3003,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 3
+          }
+        ]
+      },
+      "CS14-12408_H3K27me3": {
+        "n": 1212,
+        "label_agree": 1210,
+        "label_frac": 0.99835,
+        "dist_exact": 687,
+        "dist_within_1": 1212,
+        "dist_within_10": 1212,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 2
+          }
+        ]
+      },
+      "CS14-12408_H3K4me1": {
+        "n": 2201,
+        "label_agree": 2197,
+        "label_frac": 0.998183,
+        "dist_exact": 1178,
+        "dist_within_1": 2201,
+        "dist_within_10": 2201,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 4
+          }
+        ]
+      },
+      "CS14-12408_H3K4me3": {
+        "n": 2178,
+        "label_agree": 2175,
+        "label_frac": 0.998623,
+        "dist_exact": 1230,
+        "dist_within_1": 2178,
+        "dist_within_10": 2178,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 2
+          },
+          {
+            "easyepi": "Exon",
+            "chipseeker": "Intron",
+            "n": 1
+          }
+        ]
+      },
+      "CS16-12997_H3K27ac": {
+        "n": 3238,
+        "label_agree": 3237,
+        "label_frac": 0.999691,
+        "dist_exact": 1764,
+        "dist_within_1": 3238,
+        "dist_within_10": 3238,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 1
+          }
+        ]
+      },
+      "CS16-12997_H3K27me3": {
+        "n": 909,
+        "label_agree": 908,
+        "label_frac": 0.9989,
+        "dist_exact": 525,
+        "dist_within_1": 909,
+        "dist_within_10": 909,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 1
+          }
+        ]
+      },
+      "CS16-12997_H3K4me1": {
+        "n": 2484,
+        "label_agree": 2481,
+        "label_frac": 0.998792,
+        "dist_exact": 1328,
+        "dist_within_1": 2484,
+        "dist_within_10": 2484,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 3
+          }
+        ]
+      },
+      "CS16-12997_H3K4me3": {
+        "n": 2087,
+        "label_agree": 2084,
+        "label_frac": 0.998563,
+        "dist_exact": 1163,
+        "dist_within_1": 2087,
+        "dist_within_10": 2087,
+        "top_disagreements": [
+          {
+            "easyepi": "Intergenic",
+            "chipseeker": "Downstream",
+            "n": 2
+          },
+          {
+            "easyepi": "Exon",
+            "chipseeker": "Intron",
+            "n": 1
+          }
+        ]
+      }
+    }
+  },
+  "aliases": {
+    "5' UTR": "5'UTR",
+    "3' UTR": "3'UTR",
+    "Distal Intergenic": "Intergenic"
+  }
+}

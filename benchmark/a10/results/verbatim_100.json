@@ -1,0 +1,104 @@
+{
+  "basis": "EasyEpi annotate vs ChIPseeker 1.46.1, matched gene model (TxDb.fixed.sqlite built from txdb_fixed.gtf)",
+  "params": {
+    "tss_region": [
+      -3000,
+      3000
+    ],
+    "level": "transcript",
+    "downstream_distance": 300
+  },
+  "datasets": {
+    "CS13-12383_H3K27ac": {
+      "peaks": 2974,
+      "label_match": 2974,
+      "label_frac": 1.0,
+      "dist_match": 2974,
+      "dist_frac": 1.0
+    },
+    "CS13-12383_H3K27me3": {
+      "peaks": 709,
+      "label_match": 709,
+      "label_frac": 1.0,
+      "dist_match": 709,
+      "dist_frac": 1.0
+    },
+    "CS13-12383_H3K4me1": {
+      "peaks": 763,
+      "label_match": 763,
+      "label_frac": 1.0,
+      "dist_match": 763,
+      "dist_frac": 1.0
+    },
+    "CS13-12383_H3K4me3": {
+      "peaks": 1888,
+      "label_match": 1888,
+      "label_frac": 1.0,
+      "dist_match": 1888,
+      "dist_frac": 1.0
+    },
+    "CS14-12408_H3K27ac": {
+      "peaks": 3003,
+      "label_match": 3003,
+      "label_frac": 1.0,
+      "dist_match": 3003,
+      "dist_frac": 1.0
+    },
+    "CS14-12408_H3K27me3": {
+      "peaks": 1212,
+      "label_match": 1212,
+      "label_frac": 1.0,
+      "dist_match": 1212,
+      "dist_frac": 1.0
+    },
+    "CS14-12408_H3K4me1": {
+      "peaks": 2201,
+      "label_match": 2201,
+      "label_frac": 1.0,
+      "dist_match": 2201,
+      "dist_frac": 1.0
+    },
+    "CS14-12408_H3K4me3": {
+      "peaks": 2178,
+      "label_match": 2178,
+      "label_frac": 1.0,
+      "dist_match": 2178,
+      "dist_frac": 1.0
+    },
+    "CS16-12997_H3K27ac": {
+      "peaks": 3238,
+      "label_match": 3238,
+      "label_frac": 1.0,
+      "dist_match": 3238,
+      "dist_frac": 1.0
+    },
+    "CS16-12997_H3K27me3": {
+      "peaks": 909,
+      "label_match": 909,
+      "label_frac": 1.0,
+      "dist_match": 909,
+      "dist_frac": 1.0
+    },
+    "CS16-12997_H3K4me1": {
+      "peaks": 2484,
+      "label_match": 2484,
+      "label_frac": 1.0,
+      "dist_match": 2484,
+      "dist_frac": 1.0
+    },
+    "CS16-12997_H3K4me3": {
+      "peaks": 2087,
+      "label_match": 2087,
+      "label_frac": 1.0,
+      "dist_match": 2087,
+      "dist_frac": 1.0
+    }
+  },
+  "totals": {
+    "peaks": 23646,
+    "label_match": 23646,
+    "label_frac": 1.0,
+    "dist_match": 23646,
+    "dist_frac": 1.0
+  }
+}

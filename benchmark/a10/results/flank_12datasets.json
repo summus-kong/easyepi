@@ -1,0 +1,284 @@
+{
+  "what": "ChIPseeker getAllFlankingGene zeroing defect, 12 datasets, both levels",
+  "defect": "hitInfo$distance[subjectHits(overlapHit)] <- 0 drops queryHits(overlapHit)",
+  "versions": {
+    "1.46.1": "lines 21-23",
+    "1.49.5 (devel)": "lines 111-113, unchanged"
+  },
+  "flankDistance": 5000,
+  "transcript_level": {
+    "features": 412044,
+    "datasets": [
+      {
+        "dataset": "CS13-12383_H3K27ac",
+        "peaks": 2974,
+        "rows": 22856,
+        "zero_raw": 18821,
+        "zero_fixed": 16619,
+        "wrong": 2202,
+        "peaks_affected": 614
+      },
+      {
+        "dataset": "CS13-12383_H3K27me3",
+        "peaks": 709,
+        "rows": 6689,
+        "zero_raw": 5633,
+        "zero_fixed": 4792,
+        "wrong": 841,
+        "peaks_affected": 131
+      },
+      {
+        "dataset": "CS13-12383_H3K4me1",
+        "peaks": 763,
+        "rows": 5552,
+        "zero_raw": 4469,
+        "zero_fixed": 3890,
+        "wrong": 579,
+        "peaks_affected": 159
+      },
+      {
+        "dataset": "CS13-12383_H3K4me3",
+        "peaks": 1888,
+        "rows": 16879,
+        "zero_raw": 13262,
+        "zero_fixed": 11577,
+        "wrong": 1685,
+        "peaks_affected": 291
+      },
+      {
+        "dataset": "CS14-12408_H3K27ac",
+        "peaks": 3003,
+        "rows": 24253,
+        "zero_raw": 19678,
+        "zero_fixed": 17004,
+        "wrong": 2674,
+        "peaks_affected": 741
+      },
+      {
+        "dataset": "CS14-12408_H3K27me3",
+        "peaks": 1212,
+        "rows": 10316,
+        "zero_raw": 8900,
+        "zero_fixed": 7644,
+        "wrong": 1256,
+        "peaks_affected": 288
+      },
+      {
+        "dataset": "CS14-12408_H3K4me1",
+        "peaks": 2201,
+        "rows": 17696,
+        "zero_raw": 14786,
+        "zero_fixed": 12118,
+        "wrong": 2668,
+        "peaks_affected": 608
+      },
+      {
+        "dataset": "CS14-12408_H3K4me3",
+        "peaks": 2178,
+        "rows": 19683,
+        "zero_raw": 15851,
+        "zero_fixed": 13722,
+        "wrong": 2129,
+        "peaks_affected": 385
+      },
+      {
+        "dataset": "CS16-12997_H3K27ac",
+        "peaks": 3238,
+        "rows": 25931,
+        "zero_raw": 21240,
+        "zero_fixed": 18576,
+        "wrong": 2664,
+        "peaks_affected": 749
+      },
+      {
+        "dataset": "CS16-12997_H3K27me3",
+        "peaks": 909,
+        "rows": 8142,
+        "zero_raw": 6900,
+        "zero_fixed": 6020,
+        "wrong": 880,
+        "peaks_affected": 175
+      },
+      {
+        "dataset": "CS16-12997_H3K4me1",
+        "peaks": 2484,
+        "rows": 20412,
+        "zero_raw": 16979,
+        "zero_fixed": 13828,
+        "wrong": 3151,
+        "peaks_affected": 655
+      },
+      {
+        "dataset": "CS16-12997_H3K4me3",
+        "peaks": 2087,
+        "rows": 18619,
+        "zero_raw": 14794,
+        "zero_fixed": 12855,
+        "wrong": 1939,
+        "peaks_affected": 359
+      }
+    ],
+    "totals": {
+      "peaks": 23646,
+      "rows": 197028,
+      "zero_raw": 161313,
+      "zero_fixed": 138645,
+      "wrong": 22668,
+      "peaks_affected": 5155
+    },
+    "rates": {
+      "wrong_of_zeros": 14.05,
+      "wrong_of_rows": 11.5,
+      "peaks_affected": 21.8
+    },
+    "cli": {
+      "txid_set_equal": 23646,
+      "distances_equal_corrected": 23646,
+      "distances_equal_reference_as_written": 18491,
+      "per_entry": {
+        "both": 174360,
+        "corrected_only": 22668,
+        "reference_only": 0,
+        "neither": 0
+      }
+    }
+  },
+  "gene_level": {
+    "features": 121093,
+    "datasets": [
+      {
+        "dataset": "CS13-12383_H3K27ac",
+        "peaks": 2974,
+        "rows": 5753,
+        "zero_raw": 4702,
+        "zero_fixed": 4075,
+        "wrong": 627,
+        "peaks_affected": 373
+      },
+      {
+        "dataset": "CS13-12383_H3K27me3",
+        "peaks": 709,
+        "rows": 1689,
+        "zero_raw": 1404,
+        "zero_fixed": 1261,
+        "wrong": 143,
+        "peaks_affected": 77
+      },
+      {
+        "dataset": "CS13-12383_H3K4me1",
+        "peaks": 763,
+        "rows": 1587,
+        "zero_raw": 1229,
+        "zero_fixed": 1104,
+        "wrong": 125,
+        "peaks_affected": 84
+      },
+      {
+        "dataset": "CS13-12383_H3K4me3",
+        "peaks": 1888,
+        "rows": 3839,
+        "zero_raw": 2906,
+        "zero_fixed": 2665,
+        "wrong": 241,
+        "peaks_affected": 157
+      },
+      {
+        "dataset": "CS14-12408_H3K27ac",
+        "peaks": 3003,
+        "rows": 6049,
+        "zero_raw": 4868,
+        "zero_fixed": 4155,
+        "wrong": 713,
+        "peaks_affected": 445
+      },
+      {
+        "dataset": "CS14-12408_H3K27me3",
+        "peaks": 1212,
+        "rows": 2579,
+        "zero_raw": 2176,
+        "zero_fixed": 1880,
+        "wrong": 296,
+        "peaks_affected": 189
+      },
+      {
+        "dataset": "CS14-12408_H3K4me1",
+        "peaks": 2201,
+        "rows": 4282,
+        "zero_raw": 3473,
+        "zero_fixed": 2916,
+        "wrong": 557,
+        "peaks_affected": 361
+      },
+      {
+        "dataset": "CS14-12408_H3K4me3",
+        "peaks": 2178,
+        "rows": 4718,
+        "zero_raw": 3674,
+        "zero_fixed": 3331,
+        "wrong": 343,
+        "peaks_affected": 213
+      },
+      {
+        "dataset": "CS16-12997_H3K27ac",
+        "peaks": 3238,
+        "rows": 6454,
+        "zero_raw": 5236,
+        "zero_fixed": 4540,
+        "wrong": 696,
+        "peaks_affected": 427
+      },
+      {
+        "dataset": "CS16-12997_H3K27me3",
+        "peaks": 909,
+        "rows": 2016,
+        "zero_raw": 1684,
+        "zero_fixed": 1489,
+        "wrong": 195,
+        "peaks_affected": 111
+      },
+      {
+        "dataset": "CS16-12997_H3K4me1",
+        "peaks": 2484,
+        "rows": 4883,
+        "zero_raw": 3919,
+        "zero_fixed": 3308,
+        "wrong": 611,
+        "peaks_affected": 382
+      },
+      {
+        "dataset": "CS16-12997_H3K4me3",
+        "peaks": 2087,
+        "rows": 4392,
+        "zero_raw": 3383,
+        "zero_fixed": 3067,
+        "wrong": 316,
+        "peaks_affected": 203
+      }
+    ],
+    "totals": {
+      "peaks": 23646,
+      "rows": 48241,
+      "zero_raw": 38654,
+      "zero_fixed": 33791,
+      "wrong": 4863,
+      "peaks_affected": 3022
+    },
+    "rates": {
+      "wrong_of_zeros": 12.58,
+      "wrong_of_rows": 10.08,
+      "peaks_affected": 12.78
+    },
+    "cli": {
+      "geneid_set_equal": 23646,
+      "distances_equal_corrected": 23646,
+      "distances_equal_reference_as_written": 20624,
+      "peaks_na_both": 2990,
+      "per_entry": {
+        "both": 43378,
+        "corrected_only": 4863,
+        "reference_only": 0,
+        "neither": 0
+      }
+    }
+  }
+}
