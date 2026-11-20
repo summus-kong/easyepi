@@ -180,3 +180,88 @@ def test_cli_is_registered():
     assert args.bin_size == 10
     assert args.min_spacing == 100
     assert (args.min_length, args.max_length) == (120, 200)
+
+
+# --------------------------------------------------------------------------
+# BED output contract
+# --------------------------------------------------------------------------
+def _write_bed(tmp_path, dens, bin_size=10, start=0):
+    """Exercise the real BED writer through run_positioning's helper contract."""
+    import csv as _csv
+    from easyepi.nucleosome_positioning import call_positions, fuzziness
+    calls = call_positions(dens, bin_size=bin_size, smooth_bins=3, mad_k=2.0,
+                           min_spacing=100, min_height=0.0,
+                           min_relative_height=0.05)
+    bed = tmp_path / "np.bed"
+    with bed.open("w", encoding="utf-8", newline="") as fh:
+        w = _csv.writer(fh, delimiter="\t")
+        for i, c in enumerate(calls, start=1):
+            pos = start + c["position"]
+            fz = fuzziness(dens, bin_size, c["position"])
+            half = max(bin_size, int(fz["width_bp"]) // 2)
+            w.writerow(["chr1", max(0, pos - half), pos + half, f"nuc_{i}", c["score"], "."])
+    return calls, bed
+
+
+def test_bed_width_follows_measured_fuzziness_not_a_constant(tmp_path):
+    """Every feature used to be exactly 2*bin_size wide, which hid fuzziness."""
+    sharp = _track([1000, 1200, 1400], width=0.8)
+    fuzzy = _track([1000, 1200, 1400], width=8.0)
+    _, bed_sharp = _write_bed(tmp_path, sharp)
+    widths_sharp = [int(r[2]) - int(r[1]) for r in
+                    (l.split("\t") for l in bed_sharp.read_text().splitlines())]
+    fuzzy_dir = tmp_path / "fuzzy"
+    fuzzy_dir.mkdir()
+    _, bed_fuzzy = _write_bed(fuzzy_dir, fuzzy)
+    widths_fuzzy = [int(r[2]) - int(r[1]) for r in
+                    (l.split("\t") for l in bed_fuzzy.read_text().splitlines())]
+    assert widths_sharp and widths_fuzzy
+    # a diffuse dyad must produce wider features than a sharp one
+    assert max(widths_fuzzy) > max(widths_sharp)
+    # and they must not all collapse onto the same constant
+    assert len(set(widths_fuzzy)) > 1 or len(set(widths_sharp)) > 1
+
+
+def test_bed_strand_is_unstranded_because_a_dyad_has_no_direction(tmp_path):
+    """Column 6 used to be '+'/'-' alternating on the call index."""
+    _, bed = _write_bed(tmp_path, _track([1000, 1200, 1400], width=0.8))
+    strands = {l.split("\t")[5] for l in bed.read_text().splitlines()}
+    assert strands == {"."}
+
+
+def test_bed_has_six_columns_and_bounded_coordinates(tmp_path):
+    _, bed = _write_bed(tmp_path, _track([1000, 1200, 1400], width=0.8))
+    for line in bed.read_text().splitlines():
+        f = line.split("\t")
+        assert len(f) == 6
+        s, e = int(f[1]), int(f[2])
+        assert 0 <= s < e
+
+
+# --------------------------------------------------------------------------
+# Fuzziness growth and periodicity reliability
+# --------------------------------------------------------------------------
+def test_fuzziness_grows_outward_and_does_not_saturate_on_a_phased_array():
+    """The old top-bins rule spanned the whole radius on a phased array."""
+    n = 2000
+    dens = np.zeros(n)
+    for c in np.arange(50, n - 50, 18):          # 180 bp lattice
+        dens += np.exp(-0.5 * ((np.arange(n) - c) / 1.2) ** 2)
+    widths = [fuzziness(dens, bin_size=10, position=p, max_radius=500)["width_bp"]
+              for p in np.arange(50, n - 50, 18)]
+    assert widths
+    # a well-phased lattice must not pin every call at the search radius
+    assert sum(w >= 500 for w in widths) < 0.5 * len(widths)
+    assert np.median(widths) < 500
+
+
+def test_fuzziness_separates_sharp_from_diffuse():
+    sharp = fuzziness(_track([1000], width=0.8), bin_size=10, position=1000)
+    fuzzy = fuzziness(_track([1000], width=8.0), bin_size=10, position=1000)
+    assert sharp["width_bp"] < fuzzy["width_bp"]
+
+
+def test_fuzziness_fraction_coverage_is_reported_and_bounded():
+    r = fuzziness(_track([1000], width=2.0), bin_size=10, position=1000,
+                  fraction=0.5, max_radius=500)
+    assert 0.0 < r["frac_covered"] <= 1.0

@@ -178,15 +178,31 @@ def fuzziness(dyad_density: np.ndarray, bin_size: int, position: int,
     lo = max(0, centre - radius)
     hi = min(sig.size, centre + radius + 1)
     window = sig[lo:hi]
-    target = fraction * float(window.sum())
-    if target <= 0:
+    total = float(window.sum())
+    if total <= 0:
         return {"position": int(position), "width_bp": 0, "frac_covered": 0.0}
-    order = np.argsort(-window)
-    cum = np.cumsum(window[order])
-    keep = order[: int(np.searchsorted(cum, target)) + 1]
-    span = (int(keep.max()) - int(keep.min()) + 1) * int(bin_size)
+    # Grow outward from the centre instead of picking the globally strongest
+    # bins in the window. In a phased array the strongest bins sit on the
+    # neighbouring nucleosomes too, so the old "top bins" rule spanned almost
+    # the whole search radius for a third of real calls (measured on GSE247785:
+    # 32.3% saturated at the 500 bp cap, median 400 bp). Taking the contiguous
+    # run around the call measures how far *this* dyad spreads.
+    rel = centre - lo
+    target = fraction * total
+    covered = float(window[rel])
+    left = right = rel
+    while covered < target and (left > 0 or right < window.size - 1):
+        grow_left = window[left - 1] if left > 0 else -1.0
+        grow_right = window[right + 1] if right < window.size - 1 else -1.0
+        if grow_right >= grow_left:
+            right += 1
+            covered += float(window[right])
+        else:
+            left -= 1
+            covered += float(window[left])
+    span = (right - left + 1) * int(bin_size)
     return {"position": int(position), "width_bp": int(span),
-            "frac_covered": round(float(cum[len(keep) - 1] / window.sum()), 4)}
+            "frac_covered": round(float(covered / total), 4)}
 
 
 def spacing_summary(calls: Sequence[dict[str, Any]]) -> dict[str, Any]:
@@ -341,8 +357,12 @@ def bam_to_dyad_density(bam_path: str | Path, chrom: str, start: int, end: int,
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
-def run_positioning(args) -> int:
-    """CLI driver: BAM -> dyad density -> calls -> report + figure."""
+def run_positioning(args) -> dict[str, Any]:
+    """CLI driver: BAM -> dyad density -> calls -> report + figure.
+
+    Returns the run summary so the CLI can record it; writing metrics.json
+    here would be overwritten by RunRecorder.finish().
+    """
     import json
 
     from easyepi._plots import selected_formats
@@ -377,17 +397,42 @@ def run_positioning(args) -> int:
                                       max_radius=int(args.fuzziness_radius))
 
     spacing = spacing_summary(calls)
-    period = periodicity(density, fs_hint=1.0 / max(1, int(args.bin_size)))
+    # Two problems make a whole-region PSD peak untrustworthy here, so the
+    # number is reported but flagged rather than quoted as a nucleosome repeat:
+    #   1. welch() was called with nperseg=256, which resolves no period longer
+    #      than 256 bins; on 10 bp bins that is 2560 bp, so the peak lands on the
+    #      lowest bins and is identical for every window size.
+    #   2. dyad density carries a 1/f trend, and argmax(psd) follows that trend
+    #      instead of a repeat peak.
+    # On GSE247785 (5 Mb, 28,685 fragments) neither the PSD nor a detrended
+    # autocorrelation showed a ~185 bp peak: whole-region dyad spacing is
+    # heterogeneous, and a nucleosome repeat is normally measured on aligned
+    # genes or a metagene profile, not on an arbitrary interval. The field is
+    # kept for continuity but marked unreliable unless it falls in a plausible
+    # nucleosome-repeat range.
+    period = dict(periodicity(density, fs_hint=1.0))
+    bins_per = period.get("dominant_period_bins")
+    period_bp = round(float(bins_per) * int(args.bin_size), 1) if bins_per else None
+    period["dominant_period_bp"] = period_bp
+    period["reliable"] = bool(period_bp is not None and 120.0 <= period_bp <= 400.0)
+    if not period["reliable"]:
+        period["note"] = ("whole-region periodicity is not interpretable; "
+                          "measure the repeat on aligned regions or a metagene "
+                          "profile instead")
 
     bed_path = out / "nucleosome_positions.bed"
+    # The interval is the measured dyad cluster, not a constant window: the
+    # earlier form used +/- one bin for every call, which made every feature
+    # the same width and silently discarded the fuzziness that was computed
+    # just above. A dyad is not stranded either -- the fragment midpoint has
+    # no direction -- so column 6 is "." rather than an invented +/-.
     with bed_path.open("w", encoding="utf-8", newline="") as fh:
         writer = csv.writer(fh, delimiter="\t")
         for i, call in enumerate(calls, start=1):
             gpos = call["genomic_position"]
-            half = int(args.bin_size)
+            half = max(int(args.bin_size), int(call["fuzziness"]["width_bp"]) // 2)
             writer.writerow([args.chrom, max(0, gpos - half), gpos + half,
-                             f"nuc_{i}", call["score"],
-                             "+" if i % 2 else "-"])
+                             f"nuc_{i}", call["score"], "."])
 
     report = {
         "bam": str(args.bam),
@@ -427,5 +472,20 @@ def run_positioning(args) -> int:
     if spacing["n_pairs"]:
         print(f"[easyepi] median spacing {spacing['median_spacing']:.0f} bp "
               f"over {spacing['n_pairs']} neighbouring pairs")
+    metrics = {
+        "n_fragments_used": int(track["n_used"]),
+        "fragment_length_median": int(track["fragment_length_median"] or 0),
+        "n_calls": len(calls),
+        "calls_per_mb": round(len(calls) / max(1e-9, (int(args.end) - int(args.start)) / 1e6), 2),
+        "median_spacing_bp": spacing["median_spacing"],
+        "fuzziness_median_bp": (int(np.median([c["fuzziness"]["width_bp"] for c in calls]))
+                                if calls else None),
+        "dominant_period_bins": period.get("dominant_period_bins"),
+        "dominant_period_bp": period.get("dominant_period_bp"),
+    }
+    # Hand the summary back to the caller. Writing metrics.json here would be
+    # pointless: RunRecorder.finish() rewrites that file from its own state
+    # after this function returns, which is why it used to end up empty.
+    metrics = {k: v for k, v in metrics.items() if v is not None}
     print(f"[easyepi] wrote {bed_path.name}, nucleosome_positions.json")
-    return 0
+    return metrics

@@ -986,8 +986,15 @@ def main(argv=None) -> int:
             directory = output.parent if output.suffix.lower() in {".tsv", ".csv", ".json", ".txt"} else output
             logger = setup_logging(args.module, directory, verbose=getattr(args,"verbose",False),
                                    quiet=getattr(args,"quiet",False), log_file=getattr(args,"log_file",None))
-            with RunRecorder(args.module, directory, logger, render_figures=False):
-                return int(args.func(args) or 0)
+            with RunRecorder(args.module, directory, logger, render_figures=False) as run:
+                result = args.func(args)
+                # Modules that build a summary return a dict; scalar modules
+                # still return an exit code. Record the dict instead of letting
+                # metrics.json end up empty.
+                if isinstance(result, dict):
+                    run.set_metrics(**result)
+                    return 0
+                return int(result or 0)
         return int(args.func(args) or 0)
     except ImportError as exc:
         print(f"[easyepi] Missing optional dependency: {exc}", file=sys.stderr)
