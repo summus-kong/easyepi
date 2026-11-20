@@ -15,7 +15,7 @@ easyepi dmr --group-a ctrl.bam --group-b trt.bam --out dmr/regions.tsv
 | `--context` | optional | `CpG` | methylation context to test: CpG, CHG or CHH |
 | `--chrom` | optional |  | restrict to these chromosomes (comma-separated) |
 | `--min-coverage` | optional | `5` | minimum reads per group at a site (default 5) |
-| `--min-mapq` | optional | `10` |  |
+| `--min-mapq` | optional | `10` | minimum mapping quality for a read to be counted (default 10, lower than the peak commands because bisulfite aligners assign lower MAPQ) |
 | `--min-diff` | optional |  | minimum absolute methylation difference (0-1) |
 | `--alpha` | optional | `0.05` | FDR threshold for significant sites and regions |
 | `--max-gap` | optional | `100` | merge significant sites at most this many bp apart |

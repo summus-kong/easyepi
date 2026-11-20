@@ -15,8 +15,8 @@ easyepi peaks sample.bam -o peaks/ --assay atac
 | `--format` | optional |  | MACS3 format: BAM, BAMPE, BED, BEDPE (default from --assay) |
 | `--genome` | optional | `hs` | MACS3 genome size: hs, mm, dm or a number (default hs) |
 | `--qvalue` | optional | `0.01` | q-value cutoff (default 0.01) |
-| `--extsize` | optional |  |  |
-| `--shift-size` | optional |  |  |
+| `--extsize` | optional |  | extend each read to this length in bp (MACS3 --extsize); omit to use the MACS3 model |
+| `--shift-size` | optional |  | shift read starts by this many bp (MACS3 --shift, commonly -100); omit to use the MACS3 model |
 | `--broad` | optional |  | broad peaks (default from --assay) |
 | `--macs-arg` | optional |  | extra MACS3 options passed through verbatim, e.g. --macs-arg="--nomodel --extsize 200"; repeatable |
 | `--keep-dup-all` | optional |  | keep all duplicate reads (MACS3 default is auto) |

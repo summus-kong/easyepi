@@ -14,7 +14,7 @@ easyepi differential-peaks --peaks ctrl1,ctrl2 --bam-dir bams --peak-dir peaks -
 | `--group-a` | optional |  | comma-separated sample names forming group A |
 | `--design` | optional |  | design TSV (sample_id + group) instead of --group-a |
 | `--min-overlap` | optional | `1` | bp overlap needed to merge peaks into one region (default 1) |
-| `--min-mapq` | optional | `30` |  |
+| `--min-mapq` | optional | `30` | minimum mapping quality for a count to enter the model (default 30) |
 | `--out` | required |  | output TSV file path |
 | `--verbose` | optional |  | Write detailed logs/run.log |
 | `--log-file` | optional |  | Detailed file log path |

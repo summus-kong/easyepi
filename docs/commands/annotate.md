@@ -8,11 +8,11 @@ easyepi annotate --peaks peaks/sample/sample_peaks.narrowPeak --gtf genes.gtf --
 
 | flag | required | default | description |
 | --- | --- | --- | --- |
-| `--peaks` | required |  |  |
+| `--peaks` | required |  | peak file (narrowPeak / broadPeak / BED) whose intervals are annotated |
 | `--gtf` | optional |  | GTF/GFF gene annotation |
-| `--backend` | optional | `native` |  |
-| `--mode` | optional | `midpoint` |  |
-| `--min-overlap` | optional |  |  |
+| `--backend` | optional | `native` | interval engine; pybedtools and pyranges must be installed, native needs neither (default native) |
+| `--mode` | optional | `midpoint` | attribute a peak by its midpoint or by any overlap with the feature (default midpoint) |
+| `--min-overlap` | optional |  | fraction of the peak that must overlap the feature in overlap mode (default 0.0); ignored in midpoint mode |
 | `--promoter-upstream` | optional | `3000` | bases upstream of the TSS counted as promoter (default 3000, as ChIPseeker) |
 | `--promoter-downstream` | optional | `3000` | bases downstream of the TSS counted as promoter (default 3000, as ChIPseeker) |
 | `--downstream-distance` | optional | `300` | distance to the downstream gene end still reported as Downstream (default 300, as ChIPseeker) |

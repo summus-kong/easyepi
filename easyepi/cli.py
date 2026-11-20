@@ -428,7 +428,8 @@ def build_parser() -> argparse.ArgumentParser:
                       help="value scaling; cpm/rpkm make samples comparable")
     p_b2.add_argument("--chrom", default=None,
                       help="restrict to one chromosome (default: all)")
-    p_b2.add_argument("--min-mapq", type=int, default=30, dest="min_mapq")
+    p_b2.add_argument("--min-mapq", type=int, default=30, dest="min_mapq",
+                      help="minimum mapping quality for a read to be counted (default 30)")
     p_b2.add_argument("--max-depth", type=float, default=None, dest="max_depth",
                       help="cap per-base depth before binning")
     p_b2.add_argument("--name", action="append", default=None,
@@ -449,7 +450,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="write a project file from a folder, detecting samples and assays")
     p_i.add_argument("source", help="folder holding BAM/BigWig/peak files")
     p_i.add_argument("--out", required=True, help="project TOML to write")
-    p_i.add_argument("--project-id", default=None, dest="project_id")
+    p_i.add_argument("--project-id", default=None, dest="project_id",
+                     help="identifier written to project.json; defaults to the output directory name")
     p_i.add_argument("--genome-build", default=None, dest="genome_build",
                      help="hg38 / hg19 / mm10 / mm39; inferred from paths if omitted")
     p_i.add_argument("--annotation", default=None, help="GTF/GFF path to record")
@@ -498,8 +500,10 @@ def build_parser() -> argparse.ArgumentParser:
                       help="JSON file overriding QC warn thresholds")
     p_qc.add_argument("--max-reads", type=int, default=200000,
                       help="cap on reads inspected per metric (default: 200000)")
-    p_qc.add_argument("--verbose", action="store_true")
-    p_qc.add_argument("--quiet", action="store_true")
+    p_qc.add_argument("--verbose", action="store_true",
+                       help="write a detailed log/run.log alongside status.json")
+    p_qc.add_argument("--quiet", action="store_true",
+                       help="suppress the progress panel; errors are still reported")
     from easyepi._plots import add_figure_args
     add_figure_args(p_qc)
     p_qc.set_defaults(func=_cmd_qc)
@@ -525,7 +529,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_dm.add_argument("--min-coverage", type=int, default=5,
                       dest="min_coverage",
                       help="minimum reads per group at a site (default 5)")
-    p_dm.add_argument("--min-mapq", type=int, default=10, dest="min_mapq")
+    p_dm.add_argument("--min-mapq", type=int, default=10, dest="min_mapq",
+                      help="minimum mapping quality for a read to be counted (default 10, lower than the peak commands because bisulfite aligners assign lower MAPQ)")
     p_dm.add_argument("--min-diff", type=float, default=0.0,
                       dest="min_diff",
                       help="minimum absolute methylation difference (0-1)")
@@ -556,9 +561,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_norm = sub.add_parser("normalize", help="signal / count normalization")
     p_norm.add_argument("--matrix", required=True, help="TSV: region ID then sample columns")
     p_norm.add_argument("--factors", required=True, help="TSV: sample_id and value; measured library sizes or explicit multipliers")
-    p_norm.add_argument("--method", choices=["cpm","spikein","rpgc"], default="cpm")
-    p_norm.add_argument("--effective-genome-size", type=int, default=0)
-    p_norm.add_argument("--fragment-length", type=float)
+    p_norm.add_argument("--method", choices=["cpm","spikein","rpgc"], default="cpm",
+                        help="normalisation: cpm (library size), spikein (exogenous scale factor) or rpgc (reads per genomic content); default cpm")
+    p_norm.add_argument("--effective-genome-size", type=int, default=0,
+                       help="mappable genome length in bp used by rpgc; 0 means derive it from the BigWig chrom sizes, so set it explicitly when the track covers only part of the genome")
+    p_norm.add_argument("--fragment-length", type=float,
+                        help="average fragment length in bp; with rpgc this scales by read length / fragment length. Omit to use read length alone")
     p_norm.add_argument("--out", required=True,
                      help="output directory for the normalised tables")
     add_figure_args(p_norm)
@@ -584,8 +592,10 @@ def build_parser() -> argparse.ArgumentParser:
                       help="MACS3 genome size: hs, mm, dm or a number (default hs)")
     p_pk.add_argument("--qvalue", type=float, default=0.01,
                       help="q-value cutoff (default 0.01)")
-    p_pk.add_argument("--extsize", type=int, default=None)
-    p_pk.add_argument("--shift-size", type=int, default=None, dest="shift_size")
+    p_pk.add_argument("--extsize", type=int, default=None,
+                       help="extend each read to this length in bp (MACS3 --extsize); omit to use the MACS3 model")
+    p_pk.add_argument("--shift-size", type=int, default=None, dest="shift_size",
+                      help="shift read starts by this many bp (MACS3 --shift, commonly -100); omit to use the MACS3 model")
     p_pk.add_argument("--broad", action="store_true", default=None,
                       help="broad peaks (default from --assay)")
     p_pk.add_argument("--macs-arg", action="append", default=None,
@@ -597,11 +607,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_pk.set_defaults(func=_cmd_peaks_v2)
 
     p_an = sub.add_parser("annotate", help="peak annotation and enrichment")
-    p_an.add_argument("--peaks", required=True)
+    p_an.add_argument("--peaks", required=True,
+                       help="peak file (narrowPeak / broadPeak / BED) whose intervals are annotated")
     p_an.add_argument("--gtf", default=None, help="GTF/GFF gene annotation")
-    p_an.add_argument("--backend", default="native", choices=["native", "pybedtools", "pyranges"])
-    p_an.add_argument("--mode", default="midpoint", choices=["midpoint", "overlap"])
-    p_an.add_argument("--min-overlap", type=float, default=0.0)
+    p_an.add_argument("--backend", default="native", choices=["native", "pybedtools", "pyranges"],
+                       help="interval engine; pybedtools and pyranges must be installed, native needs neither (default native)")
+    p_an.add_argument("--mode", default="midpoint", choices=["midpoint", "overlap"],
+                       help="attribute a peak by its midpoint or by any overlap with the feature (default midpoint)")
+    p_an.add_argument("--min-overlap", type=float, default=0.0,
+                       help="fraction of the peak that must overlap the feature in overlap mode (default 0.0); ignored in midpoint mode")
     # The promoter window was hardcoded to TSS +/-3000, which is ChIPseeker's
     # default and therefore the right default here; exposing it lets a user match
     # a different ChIPseeker tssRegion, or ask about the core promoter only.
@@ -650,7 +664,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_an.set_defaults(func=_cmd_annotate)
 
     p_mo = sub.add_parser("motifs", help="motif discovery and footprint")
-    p_mo.add_argument("--peaks", required=True)
+    p_mo.add_argument("--peaks", required=True,
+                       help="peak file scanned for motif enrichment")
     p_mo.add_argument("--pwm", default=None, help="JASPAR .pfm PWM file")
     p_mo.add_argument("--fasta", default=None, help="peak sequences FASTA (target)")
     p_mo.add_argument("--background", default=None, help="background sequences FASTA")
@@ -672,7 +687,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_fp.add_argument("--start", type=int, required=True, help="probe region start (bp)")
     p_fp.add_argument("--end", type=int, required=True, help="probe region end (bp)")
     p_fp.add_argument("--flank", type=int, default=100, help="flank around each site (bp, default 100)")
-    p_fp.add_argument("--title", default="TF footprint", help="plot title")
+    p_fp.add_argument("--title", default="TF footprint",
+                       help="figure title (default \"TF footprint\"); set it per comparison so published panels are distinguishable")
     p_fp.add_argument("--out", required=True, help="output directory")
     add_figure_args(p_fp)
     p_fp.set_defaults(func=_cmd_footprint)
@@ -794,15 +810,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_gp.add_argument("--gene", action="append", default=None,
                       help="gene symbol(s) to draw; repeatable and/or comma-separated, "
                            "e.g. --gene AGRN,TP73. Omit to take the first --max-genes genes")
-    p_gp.add_argument("--max-genes", type=int, default=6, dest="max_genes")
+    p_gp.add_argument("--max-genes", type=int, default=6, dest="max_genes",
+                       help="number of genes drawn when --gene is omitted (default 6)")
     p_gp.add_argument("--flank", type=int, default=2000,
                       help="bp padding each side of the gene body (default 2000)")
-    p_gp.add_argument("--bin-size", type=int, default=25, dest="bin_size")
+    p_gp.add_argument("--bin-size", type=int, default=25, dest="bin_size",
+                       help="bin width in bp for the signal profile (default 25)")
     p_gp.add_argument("--independent-ylim", action="store_true",
                       dest="independent_ylim",
                       help="scale each panel separately instead of one y range "
                            "per track row")
-    p_gp.add_argument("--title", default=None)
+    p_gp.add_argument("--title", default=None,
+                       help="figure title; omitted when not given")
     p_gp.add_argument("--out", required=True,
                    help="output directory for panel tables and figures")
     add_figure_args(p_gp)
@@ -830,7 +849,8 @@ def build_parser() -> argparse.ArgumentParser:
                       help="design TSV (sample_id + group) instead of --group-a")
     p_dp.add_argument("--min-overlap", type=int, default=1, dest="min_overlap",
                       help="bp overlap needed to merge peaks into one region (default 1)")
-    p_dp.add_argument("--min-mapq", type=int, default=30, dest="min_mapq")
+    p_dp.add_argument("--min-mapq", type=int, default=30, dest="min_mapq",
+                       help="minimum mapping quality for a count to enter the model (default 30)")
     p_dp.add_argument("--out", required=True, help="output TSV file path")
     p_dp.set_defaults(func=_cmd_diffpeaks)
 
@@ -841,20 +861,28 @@ def build_parser() -> argparse.ArgumentParser:
     p_hs.add_argument("--signal", action="append", required=True,
                       metavar="MARK=PATH",
                       help="repeatable; bedGraph/bigWig-derived signal per mark")
-    p_hs.add_argument("--chrom", required=True)
-    p_hs.add_argument("--start", type=int, default=0)
-    p_hs.add_argument("--end", type=int, required=True)
+    p_hs.add_argument("--chrom", required=True,
+                       help="contig name as written in the BAM header, e.g. chr1")
+    p_hs.add_argument("--start", type=int, default=0,
+                       help="0-based, inclusive start (default 0)")
+    p_hs.add_argument("--end", type=int, required=True,
+                       help="0-based, exclusive end of the region to segment")
     p_hs.add_argument("--resolution", type=int, default=200,
                       help="bin size in bp (ChromHMM default 200)")
-    p_hs.add_argument("--states", type=int, default=6)
-    p_hs.add_argument("--binarize", choices=["poisson", "peaks"], default="poisson")
+    p_hs.add_argument("--states", type=int, default=6,
+                       help="number of chromatin states to learn (default 6)")
+    p_hs.add_argument("--binarize", choices=["poisson", "peaks"], default="poisson",
+                      help="how marks become presence calls: poisson (thresholded counts) or peaks (use the peak file); default poisson")
     p_hs.add_argument("--poisson-cutoff", type=float, nargs="+", default=[0.99],
+                      help="one Poisson tail probability per mark, or a single value reused for all marks (default 0.99)",
                       dest="poisson_cutoff")
-    p_hs.add_argument("--max-iter", type=int, default=200, dest="max_iter")
+    p_hs.add_argument("--max-iter", type=int, default=200, dest="max_iter",
+                      help="EM iteration cap for the state model (default 200)")
     p_hs.add_argument("--n-init", type=int, default=8, dest="n_init",
                       help="random HMM restarts; the best log-likelihood wins "
                            "(default 8)")
-    p_hs.add_argument("--seed", type=int, default=0)
+    p_hs.add_argument("--seed", type=int, default=0,
+                       help="random seed for state initialisation (default 0, so reruns agree)")
     p_hs.add_argument("--out", required=True,
                    help="output directory for state tables and figures")
     p_hs.set_defaults(func=_cmd_histone_states)
@@ -922,7 +950,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_cc.set_defaults(func=_cmd_concordance)
 
     p_vz = sub.add_parser("viz", help="visualization")
-    p_vz.add_argument("--regions", required=True)
+    p_vz.add_argument("--regions", required=True,
+                       help="region file (chrom/start/end[/name]) plotted as rows")
     p_vz.add_argument("--out", required=True,
                    help="output directory for figures")
     add_figure_args(p_vz)

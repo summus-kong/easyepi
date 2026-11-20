@@ -16,7 +16,7 @@ easyepi bam2bw sample.bam -o tracks/ --assay atac
 | `--bin-size` | optional |  | bin width in bp |
 | `--normalize` | optional |  | value scaling; cpm/rpkm make samples comparable |
 | `--chrom` | optional |  | restrict to one chromosome (default: all) |
-| `--min-mapq` | optional | `30` |  |
+| `--min-mapq` | optional | `30` | minimum mapping quality for a read to be counted (default 30) |
 | `--max-depth` | optional |  | cap per-base depth before binning |
 | `--name` | optional |  | override a sample name (default: BAM file stem) |
 | `--jobs`, `-j` | optional |  | worker processes for coverage accumulation; default: every core the scheduler allows, 1 = in-process |

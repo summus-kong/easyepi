@@ -22,8 +22,8 @@ easyepi qc --assay atac --bam sample.bam --out qc.json
 | `--blacklist` | optional |  | ENCODE-style blacklist BED |
 | `--qc-thresholds` | optional |  | JSON file overriding QC warn thresholds |
 | `--max-reads` | optional | `200000` | cap on reads inspected per metric (default: 200000) |
-| `--verbose` | optional |  |  |
-| `--quiet` | optional |  |  |
+| `--verbose` | optional |  | write a detailed log/run.log alongside status.json |
+| `--quiet` | optional |  | suppress the progress panel; errors are still reported |
 | `--figure-format` | optional |  | Export format for figures; repeat to export several. Default: pdf (vector) |
 | `--no-figures` | optional |  | Do not write figures; only tables and JSON are produced |
 

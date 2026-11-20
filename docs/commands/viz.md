@@ -8,7 +8,7 @@ easyepi viz --regions regions.bed --out viz/ --figure-format pdf
 
 | flag | required | default | description |
 | --- | --- | --- | --- |
-| `--regions` | required |  |  |
+| `--regions` | required |  | region file (chrom/start/end[/name]) plotted as rows |
 | `--out` | required |  | output directory for figures |
 | `--figure-format` | optional |  | Export format for figures; repeat to export several. Default: pdf (vector) |
 | `--no-figures` | optional |  | Do not write figures; only tables and JSON are produced |
