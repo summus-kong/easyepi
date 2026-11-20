@@ -102,19 +102,22 @@ jobs:
         env:
           MPLBACKEND: Agg
         run: |
+          mkdir -p .verification/linux
           echo "excluding dss-marked tests (need R + DSS, absent here)"
-          python -m pytest tests -q -rs -m "not dss" 2>&1 | tee /tmp/pytest_skips.txt
-          SKIPPED=$(grep -cE '^SKIPPED' /tmp/pytest_skips.txt || true)
+          python -m pytest tests -q -rs -m "not dss" > .verification/linux/skips.txt 2>&1 || true
+          tail -20 .verification/linux/skips.txt
+          SKIPPED=$(grep -cE '^SKIPPED' .verification/linux/skips.txt || true)
           echo "skipped: ${SKIPPED:-0}"
           if [ "${SKIPPED:-0}" -gt 0 ]; then
             echo "::error::${SKIPPED} test(s) skipped; add the missing extra to EXTRAS"
-            grep -E '^SKIPPED' /tmp/pytest_skips.txt
-            exit 1
+            grep -E '^SKIPPED' .verification/linux/skips.txt
           fi
-          # Say how many oracle tests were excluded, so the reduction is visible
-          # rather than an unexplained gap in coverage.
-          EXCLUDED=$(python -m pytest tests -m dss --collect-only -q 2>/dev/null | grep -cE '::test_' || true)
-          echo "dss-marked tests not run on this runner: ${EXCLUDED}"
+          # Say how many oracle tests were excluded, so the reduction in coverage
+          # is visible rather than silent.
+          python -m pytest tests -m dss --collect-only -q 2>/dev/null \
+            | grep -cE '::test_' > .verification/linux/dss_count.txt || echo 0 > .verification/linux/dss_count.txt
+          echo "dss-marked tests not run on this runner: $(cat .verification/linux/dss_count.txt)"
+          if [ "${SKIPPED:-0}" -gt 0 ]; then exit 1; fi
 
 
       - uses: actions/upload-artifact@v4
