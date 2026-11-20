@@ -103,9 +103,15 @@ def _run_oracle(tmp: Path, smoothing: bool = True, equal_disp: bool = False,
     return pd.read_csv(out, sep="\t")
 
 
+# These compare against the real DSS package through its R oracle, so they can
+# only run where R and DSS are installed. They are marked `dss` as well as
+# skipped: the marker lets CI exclude them deliberately (and print why) instead
+# of tripping the "no test may be silently skipped" rule, which must stay strict
+# for every test that does not need R.
 requires_r = pytest.mark.skipif(
     find_rscript() is None or not ORACLE.exists(),
     reason="Rscript with DSS not available")
+requires_dss = pytest.mark.dss
 
 
 def _compare(smoothing: bool, equal_disp: bool, direct: bool = False,
@@ -178,6 +184,7 @@ def _compare(smoothing: bool, equal_disp: bool, direct: bool = False,
 
 
 @requires_r
+@requires_dss
 def test_default_mode_reproduces_dss():
     """``DMLtest(smoothing = TRUE, equal.disp = FALSE)``, every intermediate.
 
@@ -190,24 +197,28 @@ def test_default_mode_reproduces_dss():
 
 
 @requires_r
+@requires_dss
 def test_equal_dispersion_matches_dss():
     """``DMLtest(equal.disp = TRUE)``: one dispersion, compared not just checked."""
     _compare(smoothing=True, equal_disp=True)
 
 
 @requires_r
+@requires_dss
 def test_no_smoothing_matches_dss():
     """``DMLtest(smoothing = FALSE)``: a separate path with its own variance floor."""
     _compare(smoothing=False, equal_disp=False)
 
 
 @requires_r
+@requires_dss
 def test_no_smoothing_equal_disp_matches_dss():
     """``smoothing = FALSE`` with ``equal.disp = TRUE``."""
     _compare(smoothing=False, equal_disp=True)
 
 
 @requires_r
+@requires_dss
 def test_no_smoothing_one_replicate_matches_dss():
     """One replicate per group with ``smoothing = FALSE``.
 

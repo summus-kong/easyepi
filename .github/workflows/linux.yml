@@ -93,10 +93,17 @@ jobs:
         # Every extra is installed above, so nothing should skip. A skip means a test
         # guards on an import that is missing from EXTRAS, which is a gap in the
         # check rather than a fact about the code.
+        #
+        # One exception is declared rather than tolerated: the `dss` tests compare
+        # against the real DSS package through its R oracle, and this runner has no
+        # R. They are excluded by marker so the skip count below stays meaningful —
+        # if any other test starts skipping, this step still fails. The oracle tests
+        # are expected to run on the analysis host.
         env:
           MPLBACKEND: Agg
         run: |
-          python -m pytest tests -q -rs 2>&1 | tee /tmp/pytest_skips.txt
+          echo "excluding dss-marked tests (need R + DSS, absent here)"
+          python -m pytest tests -q -rs -m "not dss" 2>&1 | tee /tmp/pytest_skips.txt
           SKIPPED=$(grep -cE '^SKIPPED' /tmp/pytest_skips.txt || true)
           echo "skipped: ${SKIPPED:-0}"
           if [ "${SKIPPED:-0}" -gt 0 ]; then
@@ -104,6 +111,11 @@ jobs:
             grep -E '^SKIPPED' /tmp/pytest_skips.txt
             exit 1
           fi
+          # Say how many oracle tests were excluded, so the reduction is visible
+          # rather than an unexplained gap in coverage.
+          EXCLUDED=$(python -m pytest tests -m dss --collect-only -q 2>/dev/null | grep -cE '::test_' || true)
+          echo "dss-marked tests not run on this runner: ${EXCLUDED}"
+
 
       - uses: actions/upload-artifact@v4
         if: always()

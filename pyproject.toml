@@ -91,6 +91,9 @@ namespaces = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "dss: compares against the real DSS package through its R oracle; excluded in CI where R is absent",
+]
 
 [tool.setuptools]
 include-package-data = false
