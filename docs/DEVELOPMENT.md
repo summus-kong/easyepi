@@ -28,7 +28,7 @@ easyepiv1/
       chip/                 ChIP/CUT&Tag/CUT&RUN entries
       histone/              Histone QC and official ChromHMM stages
       methylation/          Methylation QC, profile, annotation, site comparison
-      mnase/                MNase summaries; positioning explicitly unsupported
+      mnase/                MNase signal summaries; dyad calls live in nucleosome_positioning
     core/                   Models, readers and statistical primitives
     annotate/               Genomic annotation helpers
     differential/           SciPy comparisons and design matching
@@ -151,6 +151,28 @@ Additional files: `examples/project.toml` illustrates sample/reference metadata;
 Expose an importable function first; keep command parsing in the independent module. Use RunRecorder/setup_logging for status and optional detailed logs. Add no implicit group split, control, coverage, library size or statistical fallback. Return Figures from plotting helpers and export only on explicit request. For mature external tools, check nonzero exits and preserve outputs; record the exact command. Add a targeted test for a real failure mode rather than mirroring the implementation.
 
 Use unique output directories per module. Shared files such as status.json are not a workflow scheduler or concurrent-run registry. Threads are passed only to supported backends; the generic --threads metadata flag does not parallelize every Python function. Paths in input data may contain Unicode, but maintained source prose and CLI output are English.
+
+## Renamed and removed entry points
+
+`specific.mnase.positioning` was a do-nothing module: it parsed arguments and
+called `parser.error()` so the ATAC peak caller could not run under the MNase
+name. It had no working behaviour to keep, and it has been deleted rather than
+left as a promise. Any caller that imported it now gets a plain
+`ModuleNotFoundError`, which is the intended signal.
+
+| Was | Use instead |
+| --- | --- |
+| `easyepi.specific.mnase.positioning` (module) | `easyepi nucleosome-positioning --bam ... --chrom ... --start ... --end ...` |
+| `python -m easyepi.specific.mnase.positioning` | `easyepi nucleosome-positioning ...` |
+| occupancy / NFR summaries from a signal track | `easyepi nucleosome --bigwig ... --chrom ... --start ... --end ...` |
+
+`nucleosome-positioning` calls dyads from paired-end fragments and refuses
+single-end input, because a dyad midpoint needs the mate. It is not NucleoATAC
+or MINCE and its positions are not interchangeable with theirs.
+
+No shim is installed on purpose: a shim would resolve the old import and would
+fail `test_no_reserved_positioning_stub`, which exists so the stub cannot come
+back without someone noticing.
 
 ## Where commits are made and pushed
 
