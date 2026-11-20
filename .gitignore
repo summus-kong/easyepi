@@ -22,3 +22,13 @@ site/
 # Local working rules for agents/contributors. Deliberately not published:
 # it names an internal host, an account and this project network situation.
 AGENTS.md
+
+# Local history backups. `git bundle create` output is a full copy of refs,
+# including commits that were deliberately removed from the published history,
+# so committing one would republish them.
+*.bundle
+
+# Exploratory pilot studies. They carry their own README and conclusions but sit
+# outside the package, are not exercised by the test suite, and reference data
+# that only exists on one machine. Keep them local; see docs/BACKLOG.md.
+pilot_*/
