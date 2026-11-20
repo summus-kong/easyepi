@@ -1,7 +1,7 @@
 # easyepi nucleosome
 
 ```bash
-easyepi nucleosome --bigwig mnase.bw --out nuc/
+easyepi nucleosome --bigwig mnase.bw --chrom chr1 --start 0 --end 1000000 --out nuc/
 ```
 
 ## Options

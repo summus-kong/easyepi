@@ -32,7 +32,8 @@ MINIMAL_EXAMPLE: dict[str, str] = {
               "--motifs jaspar.pfm --out motifs/",
     "footprint": "easyepi footprint --bigwig cut.bw --target sites.bed "
                  "--chrom chr1 --start 0 --end 1000000 --out fp/",
-    "nucleosome": "easyepi nucleosome --bigwig mnase.bw --out nuc/",
+    "nucleosome": "easyepi nucleosome --bigwig mnase.bw "
+                  "--chrom chr1 --start 0 --end 1000000 --out nuc/",
     "nucleosome-positioning": "easyepi nucleosome-positioning --bam paired.bam "
                               "--chrom chr1 --start 0 --end 1000000 --out np/",
     "gene-panel": "easyepi gene-panel --bigwig a.bw,b.bw --gtf genes.gtf "
