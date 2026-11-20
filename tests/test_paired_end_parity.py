@@ -64,11 +64,16 @@ def _write(tmp_path, paired: bool):
     return path
 
 
-def _coverage(path, shift: str):
+def _coverage_and_counts(path, shift: str):
     spec = CoverageSpec(bam_path=str(path), chrom="chr1", chrom_length=100_000,
                         bin_size=1000, min_mapq=30, shift=shift,
                         max_depth=None, chunk_bp=10_000)
     return _accumulate_range(spec, 0, 50_000)
+
+
+def _coverage(path, shift: str):
+    values, _counts = _coverage_and_counts(path, shift)
+    return values
 
 
 def test_paired_end_body_matches_single_end_bytes(tmp_path):
@@ -85,6 +90,25 @@ def test_paired_end_contributes_one_cut_site_per_fragment(tmp_path):
     se = _coverage(_write(tmp_path, False), "tn5")
     pe = _coverage(_write(tmp_path, True), "tn5")
     assert se.sum() == pe.sum() == len(FRAGMENTS)
+
+
+def test_counts_report_one_fragment_per_template(tmp_path):
+    """The reported mode must match what the body path actually did.
+
+    A proper pair is one fragment; counting both mates would make this
+    `2 * len(FRAGMENTS)` and the metadata would then describe a track that
+    double counts -- the failure mode BACKLOG item 3 exists to prevent.
+    """
+    _values, counts = _coverage_and_counts(_write(tmp_path, True), "none")
+    assert counts["fragment"] == len(FRAGMENTS)
+    assert counts["read"] == 0
+
+
+def test_single_end_is_reported_as_reads_not_fragments(tmp_path):
+    """A file with no pairs must say `read`, not claim fragments."""
+    _values, counts = _coverage_and_counts(_write(tmp_path, False), "none")
+    assert counts["fragment"] == 0
+    assert counts["read"] == len(FRAGMENTS)
 
 
 def test_fragment_length_is_defined_for_pairs_and_flagged_for_single_end(tmp_path):

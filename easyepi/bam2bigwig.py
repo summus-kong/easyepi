@@ -250,7 +250,7 @@ def bam_to_bigwig(
                                  bin_size=bin_size, min_mapq=int(min_mapq),
                                  shift="none", max_depth=max_depth)
                      for name in targets]
-            raw = coverage_many(specs, workers=int(jobs))
+            raw, counting = coverage_many(specs, workers=int(jobs))
             for name in targets:
                 computed[name] = raw[name] * scale
 
@@ -286,6 +286,11 @@ def bam_to_bigwig(
     finally:
         bw.close()
 
+    # Set by the body-mode branch above; left None elsewhere so the metadata
+    # block can tell 'not applicable' from 'not measured'.
+    if "counting" not in locals():
+        counting = None
+
     meta = {
         "bam": str(bam_path),
         "bigwig": str(out_path),
@@ -316,6 +321,22 @@ def bam_to_bigwig(
             "rpkm": "depth per million mapped reads per kb of bin",
         }[normalize],
     }
+    if counting:
+        # `fragment` = one row per template (proper pair, mate skipped),
+        # `read` = one row per alignment (unpaired, or a pair flag without a
+        # usable template). Reported per chromosome and never summed across
+        # chromosomes: chunks are fetched with a pad and clipped, so a genome
+        # total built by addition would double count reads on a boundary.
+        frag = sum(c.get("fragment", 0) for c in counting.values())
+        read = sum(c.get("read", 0) for c in counting.values())
+        meta["counting"] = {
+            "unit": "fragment" if frag >= read else "read",
+            "fragments": frag,
+            "unpaired_reads": read,
+            "per_chromosome": counting,
+            "note": "fragments are counted once and spanned to the mate's "
+                    "outer edge; unpaired records are counted at read extent",
+        }
     Path(str(out_path) + ".json").write_text(
         json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
     return meta

@@ -61,7 +61,8 @@ class CoverageSpec:
     chunk_bp: int = CHUNK_BP
 
 
-def _accumulate_range(spec: CoverageSpec, start: int, end: int) -> np.ndarray:
+def _accumulate_range(spec: CoverageSpec, start: int, end: int
+                      ) -> tuple[np.ndarray, dict[str, int]]:
     """Per-bin signal for ``[start, end)`` on one chromosome.
 
     Read bodies (``shift="none"``) are added as one contiguous span per alignment;
@@ -76,6 +77,10 @@ def _accumulate_range(spec: CoverageSpec, start: int, end: int) -> np.ndarray:
     pysam = _require_pysam()
     n_bins = max(1, int(np.ceil((end - start) / spec.bin_size)))
     out = np.zeros(n_bins, dtype=np.float64)
+    # Counted while the records are already in hand, so reporting the mode
+    # costs one integer per record. `fragment` means one row per template
+    # (mate two was skipped); `read` means a template-less record.
+    counts = {"fragment": 0, "read": 0}
 
     pad = 2_000  # > any single alignment length for short-read data
     fetch_start = max(0, start - pad)
@@ -94,6 +99,14 @@ def _accumulate_range(spec: CoverageSpec, start: int, end: int) -> np.ndarray:
                 continue
             if rec.is_paired and not rec.is_read1:
                 continue
+            if not rec.is_paired:
+                counts["read"] += 1
+            elif rec.is_proper_pair:
+                counts["fragment"] += 1
+            else:
+                # pair flag set but no usable template: still one record, and
+                # calling it a fragment would overstate what was countable.
+                counts["read"] += 1
             if spec.shift == "tn5":
                 if rec.is_reverse:
                     pos = int(rec.reference_end) - 5 if rec.reference_end else -1
@@ -125,7 +138,7 @@ def _accumulate_range(spec: CoverageSpec, start: int, end: int) -> np.ndarray:
                 spans_end.append(e)
 
     if not spans_start:
-        return out
+        return out, counts
 
     ss = np.asarray(spans_start, dtype=np.int64)
     se = np.asarray(spans_end, dtype=np.int64)
@@ -135,7 +148,7 @@ def _accumulate_range(spec: CoverageSpec, start: int, end: int) -> np.ndarray:
     keep = se > ss
     ss, se = ss[keep], se[keep]
     if ss.size == 0:
-        return out
+        return out, counts
 
     # difference array: +1 at span start, -1 at span end, then cumsum
     diff = np.zeros((end - start) + 1, dtype=np.float64)
@@ -153,12 +166,13 @@ def _accumulate_range(spec: CoverageSpec, start: int, end: int) -> np.ndarray:
     rem = depth[n_full * spec.bin_size:]
     if rem.size:
         out[n_full] += float(rem.sum())
-    return out
+    return out, counts
 
 
-def _worker(task: tuple[CoverageSpec, int, int]) -> tuple[int, np.ndarray]:
+def _worker(task: tuple[CoverageSpec, int, int]):
     spec, start, end = task
-    return start, _accumulate_range(spec, start, end)
+    values, counts = _accumulate_range(spec, start, end)
+    return start, values, counts
 
 
 def _chunk_tasks(spec: CoverageSpec, chunk_bp: int) -> list[tuple[CoverageSpec, int, int]]:
@@ -178,13 +192,13 @@ def coverage_chromosome(spec: CoverageSpec, workers: int = 1,
     """Coverage bins for one chromosome, chunked and optionally parallel."""
     n_bins = max(1, int(np.ceil(spec.chrom_length / spec.bin_size)))
     out = np.zeros(n_bins, dtype=np.float64)
-    for start, values in _run_tasks(_chunk_tasks(spec, chunk_bp), workers):
+    for start, values, _counts in _run_tasks(_chunk_tasks(spec, chunk_bp), workers):
         _place(out, values, start, spec.bin_size, n_bins)
     return out
 
 
 def coverage_many(specs: Sequence[CoverageSpec], workers: int = 1,
-                  chunk_bp: int = CHUNK_BP) -> dict[str, np.ndarray]:
+                  chunk_bp: int = CHUNK_BP):
     """Coverage for several chromosomes through ONE worker pool.
 
     Submitting every chromosome-chunk of the whole reference at once is what makes
@@ -202,9 +216,13 @@ def coverage_many(specs: Sequence[CoverageSpec], workers: int = 1,
     for spec in specs:
         tasks.extend(_chunk_tasks(spec, chunk_bp))
 
-    for (start, values), spec in _run_tasks_tagged(tasks, workers, by_chrom):
+    per_chrom: dict[str, dict[str, int]] = {
+        spec.chrom: {"fragment": 0, "read": 0} for spec in specs}
+    for (start, values, counts), spec in _run_tasks_tagged(tasks, workers, by_chrom):
         _place(out[spec.chrom], values, start, spec.bin_size, n_bins[spec.chrom])
-    return out
+        for key, value in counts.items():
+            per_chrom[spec.chrom][key] += value
+    return out, per_chrom
 
 
 def _run_tasks(tasks: Sequence[tuple[CoverageSpec, int, int]], workers: int):
@@ -240,7 +258,8 @@ def _run_tasks_tagged(tasks, workers: int, by_chrom: dict[str, CoverageSpec]):
 
 def _worker_tagged(task: tuple[CoverageSpec, int, int]):
     spec, start, end = task
-    return (start, _accumulate_range(spec, start, end)), spec
+    values, counts = _accumulate_range(spec, start, end)
+    return (start, values, counts), spec
 
 def _place(out: np.ndarray, values: np.ndarray, start: int, bin_size: int,
            n_bins: int) -> None:

@@ -57,7 +57,7 @@ zeros for the null features. Pinned by `tests/test_deseq2_adapter.py`.
 | Sub-task | Status | Notes |
 | --- | --- | --- |
 | TSS enrichment score | DONE (v0.6.0) | `easyepi/tss_enrichment.py`; `qc --tss` accepts a GTF directly. Four states, so a zero-background library reads as measured-and-failed rather than never measured |
-| Fragment-length distribution | TODO | derive from BAM CIGAR/TLEN; report nucleosome-free/mono/di peaks |
+| Fragment-length distribution | DONE (v0.6.0) | `assay_metrics.fragment_length_summary`; proper pairs only, each template counted once, nucleosome-free / mono / di nucleosome fractions reported. Single-end input returns `not_applicable` rather than a fabricated length |
 | Duplicate fraction | TODO | pysam `get_duplicate_flag`; distinct from library complexity |
 | Mitochondrial fraction | TODO | needs a chrom-name pattern; make it a flag, not a guess |
 | Library complexity (preseq-style estimate) | TODO | at minimum: distinct fragments / total fragments |
@@ -66,17 +66,20 @@ zeros for the null features. Pinned by `tests/test_deseq2_adapter.py`.
 
 ## 3. Fragment counting backend
 
-**Status:** TODO
-**Module:** `easyepi/fragment_counts.py` (new)
+**Status:** DONE (v0.6.0)
+**Module:** `easyepi/coverage_parallel.py`, `easyepi/bam2bigwig.py`
 
-Current BAM mode counts alignments. For paired-end ATAC that over-counts: two mates of
-one fragment are two alignments.
+The body path used to add one span per alignment, so a paired-end ATAC fragment
+contributed twice. It now counts one span per template.
 
 | Sub-task | Status | Notes |
 | --- | --- | --- |
-| Paired-fragment counting | TODO | proper pair + same chrom + TLEN-based dedup |
-| Single-end fallback with explicit warning | TODO | never silently treat SE as fragments |
-| Report which mode was used | TODO | in metrics JSON and the manifest |
+| Paired-fragment counting | DONE (v0.6.0) | mate two skipped via `is_read1`, span taken from TLEN to the mate's outer edge. `test_paired_end_parity` pins that PE coverage equals the SE body |
+| Single-end fallback with explicit warning | DONE (v0.6.0) | unpaired records are counted at read extent and reported as `read`, so SE is never silently called a fragment |
+| Report which mode was used | DONE (v0.6.0) | `counting` block in the BigWig JSON: `unit`, `fragments`, `unpaired_reads` and per-chromosome counts. Reported per chromosome, never summed across chromosomes, because chunks are padded and clipped |
+
+Not covered: the cut-site path (`--assay atac`, `shift=tn5`) counts read ends, so
+`counting` is absent there by design rather than reporting a wrong unit.
 
 ## 4. TF activity bias correction
 
