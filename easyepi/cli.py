@@ -32,8 +32,7 @@ MINIMAL_EXAMPLE: dict[str, str] = {
               "--motifs jaspar.pfm --out motifs/",
     "footprint": "easyepi footprint --bigwig cut.bw --target sites.bed "
                  "--chrom chr1 --start 0 --end 1000000 --out fp/",
-    "nucleosome": "easyepi nucleosome --bigwig mnase.bw "
-                  "--chrom chr1 --start 0 --end 5000000 --out nuc/",
+    "nucleosome": "easyepi nucleosome --bigwig mnase.bw --out nuc/",
     "nucleosome-positioning": "easyepi nucleosome-positioning --bam paired.bam "
                               "--chrom chr1 --start 0 --end 1000000 --out np/",
     "gene-panel": "easyepi gene-panel --bigwig a.bw,b.bw --gtf genes.gtf "
@@ -743,7 +742,7 @@ def build_parser() -> argparse.ArgumentParser:
                            "(default 0.05); guards against noise when MAD is 0")
     p_np.add_argument("--fuzziness-fraction", type=float, default=0.5,
                       dest="fuzziness_fraction")
-    p_np.add_argument("--fuzziness-radius", type=int, default=500,
+    p_np.add_argument("--fuzziness-radius", type=int, default=150,
                       dest="fuzziness_radius")
     p_np.add_argument("--max-fragments", type=int, default=2000000,
                       dest="max_fragments")

@@ -158,13 +158,21 @@ def call_positions(dyad_density: np.ndarray, bin_size: int, smooth_bins: int = 3
 
 
 def fuzziness(dyad_density: np.ndarray, bin_size: int, position: int,
-              fraction: float = 0.5, max_radius: int = 500) -> dict[str, Any]:
+              fraction: float = 0.5, max_radius: int = 150) -> dict[str, Any]:
     """Breadth of the dyad cluster around one call, in bp.
 
     Grows outward from ``position`` until ``fraction`` of the local signal within
     ``max_radius`` has been enclosed. A narrow value means the fragments agree on
     one dyad (well positioned); a wide value means a fuzzy or delocalised
     nucleosome. The number is descriptive: no position-quality cutoff is asserted.
+
+    ``max_radius`` defaults to 150 bp, roughly one nucleosome (147 bp) plus its
+    linker. A wider window does not measure fuzziness better, it measures the
+    neighbouring nucleosomes: on GSE247785 chr1 the share of calls pinned at the
+    cap *rose* with the radius (150 bp: 11.8 %, 500 bp: 28.0 %, 800 bp: 32.8 %;
+    chr1:20-25 Mb gave 16.6 / 32.8 % for 150 / 500 bp). Because the fraction is
+    taken over the whole window, a radius spanning several nucleosomes forces
+    almost every call to grow to the cap.
     """
     sig = np.asarray(dyad_density, dtype=np.float64)
     if sig.size == 0:

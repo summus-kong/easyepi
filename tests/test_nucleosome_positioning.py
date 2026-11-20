@@ -265,3 +265,34 @@ def test_fuzziness_fraction_coverage_is_reported_and_bounded():
     r = fuzziness(_track([1000], width=2.0), bin_size=10, position=1000,
                   fraction=0.5, max_radius=500)
     assert 0.0 < r["frac_covered"] <= 1.0
+
+
+# --------------------------------------------------------------------------
+# Fuzziness search radius
+# --------------------------------------------------------------------------
+def test_default_fuzziness_radius_is_one_nucleosome():
+    """A wider default does not measure fuzziness, it measures neighbours.
+
+    On GSE247785 the share of calls pinned at the cap rose with the radius
+    (150 bp -> 11.8 %, 500 bp -> 28.0 %, 800 bp -> 32.8 %), because the fraction
+    is taken over the whole window. The default must stay near one nucleosome.
+    """
+    import inspect
+    sig = inspect.signature(fuzziness)
+    assert sig.parameters["max_radius"].default == 150
+
+
+def test_a_narrow_radius_leaves_headroom_instead_of_pinning_every_call():
+    """Calls must keep a spread, not all land on the cap."""
+    dens = _track([1000, 1200, 1400], width=1.5)
+    single = fuzziness(dens, bin_size=10, position=1000, max_radius=150)
+    # one isolated dyad is much narrower than the window
+    assert single["width_bp"] < 150
+
+
+def test_widening_the_radius_cannot_shrink_a_measured_width():
+    """The width is monotone in the radius: more room can only enclose more."""
+    dens = _track([1000, 1200, 1400], width=4.0)
+    widths = [fuzziness(dens, bin_size=10, position=1000, max_radius=r)["width_bp"]
+              for r in (100, 150, 300)]
+    assert widths == sorted(widths)

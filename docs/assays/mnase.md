@@ -88,6 +88,12 @@ midpoint of.
 - the length window 120–200 bp selects mononucleosomes; widen it for soft digestion
 - `--min-spacing` (default 100 bp) prevents one broad nucleosome from being called
   several times
-- `--fuzziness-radius` (default 500 bp) caps the dyad-cluster search. On the
-  dataset above about 28 % of calls still hit that cap, so raise it when
-  neighbouring nucleosomes sit closer than 500 bp
+- `--fuzziness-radius` (default 150 bp, about one nucleosome plus its linker)
+  caps the dyad-cluster search. A wider window does not measure fuzziness
+  better, it measures the neighbouring nucleosomes: because the enclosed
+  fraction is taken over the whole window, the share of calls pinned at the cap
+  *rises* with the radius — on the dataset above 11.8 % at 150 bp, 28.0 % at
+  500 bp, 32.8 % at 800 bp (chr1:20-25 Mb gave 16.6 % and 32.8 % for 150 and
+  500 bp). Raise it only when you deliberately want the cluster to span more
+  than one nucleosome, and read `fuzziness` as descriptive rather than as a
+  positioning-quality score
