@@ -277,6 +277,7 @@ def write_command_pages(parser) -> list[Path]:
     choices = _subparsers(parser)
     wanted = ["bam2bw", "qc", "peaks", "annotate", "tf-annotate", "dmr",
               "diff", "concordance",
+              "nucleosome", "nucleosome-positioning",
               "differential-peaks", "viz"]
     written = []
     (DOCS / "commands").mkdir(parents=True, exist_ok=True)

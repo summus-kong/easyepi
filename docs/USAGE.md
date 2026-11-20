@@ -266,7 +266,7 @@ when MAD is 0, which is normal for a sparse dyad track.
 
 | Output | Contents |
 | --- | --- |
-| `nucleosome_positions.bed` | one interval per call, ±one bin around the dyad |
+| `nucleosome_positions.bed` | one interval per call, spanning the measured dyad cluster; column 6 is `.` because a dyad has no strand |
 | `nucleosome_positions.json` | calls, fuzziness, spacing, periodicity, parameters |
 
 Single-end BAMs are refused: a single-end read gives one cut site and no fragment

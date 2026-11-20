@@ -127,12 +127,15 @@ shell operator. Use `--assay cuttag` or quote the value.
 
 ## MNase-seq
 
-Occupancy and periodicity from a signal track; dyad calls need paired-end fragments.
+Occupancy from a signal track; dyad calls need paired-end fragments.
 
 ```bash
-# Occupancy and periodicity from the signal
+# Occupancy and nucleosome-free fraction from the signal.
+# The repeat estimate is reported with a reliability flag: a whole-region
+# period is not a nucleosome repeat (see docs/assays/mnase.md).
 easyepi bam2bw mnase.bam -o tracks/ --assay mnase --jobs 8
-easyepi nucleosome --bam mnase.bam --out nuc/ --figure-format pdf
+easyepi nucleosome --bigwig tracks/mnase.bw \
+    --chrom chr1 --start 0 --end 5000000 --bin-size 10 --out nuc/
 
 # Dyad calling from paired-end fragments (single-end is refused)
 easyepi nucleosome-positioning \

@@ -410,15 +410,8 @@ def run_positioning(args) -> dict[str, Any]:
     # genes or a metagene profile, not on an arbitrary interval. The field is
     # kept for continuity but marked unreliable unless it falls in a plausible
     # nucleosome-repeat range.
-    period = dict(periodicity(density, fs_hint=1.0))
-    bins_per = period.get("dominant_period_bins")
-    period_bp = round(float(bins_per) * int(args.bin_size), 1) if bins_per else None
-    period["dominant_period_bp"] = period_bp
-    period["reliable"] = bool(period_bp is not None and 120.0 <= period_bp <= 400.0)
-    if not period["reliable"]:
-        period["note"] = ("whole-region periodicity is not interpretable; "
-                          "measure the repeat on aligned regions or a metagene "
-                          "profile instead")
+    from easyepi.nucleosome import nucleosome_repeat
+    period = nucleosome_repeat(density, bin_size=int(args.bin_size))
 
     bed_path = out / "nucleosome_positions.bed"
     # The interval is the measured dyad cluster, not a constant window: the

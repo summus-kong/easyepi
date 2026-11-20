@@ -18,7 +18,7 @@ easyepi peaks sample.bam -o peaks/ --assay atac
 | [ATAC-seq](assays/atac.md) | full — Tn5 shift, FRiP, peaks, footprint, nucleosome |
 | [ChIP-seq](assays/chip.md) | full — narrow/broad peaks, FRiP, chromatin states |
 | [CUT&Tag / CUT&RUN](assays/cuttag.md) | full — same Tn5 path as ATAC |
-| [MNase-seq](assays/mnase.md) | partial — occupancy and periodicity; dyads need paired-end |
+| [MNase-seq](assays/mnase.md) | partial — occupancy and nucleosome-free fraction; dyad calls need paired-end; a whole-region repeat is not reported as a nucleosome repeat |
 | [WGBS / bisulfite](assays/wgbs.md) | full — per-cytosine calls from the BAM, two-group DMR |
 
 ## Design commitments
