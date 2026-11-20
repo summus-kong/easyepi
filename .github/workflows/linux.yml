@@ -32,8 +32,12 @@ concurrency:
 #
 # `activity` belongs here on every interpreter: easyepi/activity.py supports both
 # decoupler 1.9.x and 2.x, and pip picks whichever matches the Python version.
+#
+# `deseq2` was missing here even though pyproject declares it, and
+# tests/test_deseq2_adapter.py skips without pydeseq2 — so this list, not the
+# test suite, was the reason the skip check failed.
 env:
-  EXTRAS: "bam,viz,states,activity,motif,dev"
+  EXTRAS: "bam,viz,states,activity,motif,deseq2,dev"
 
 jobs:
   test:
