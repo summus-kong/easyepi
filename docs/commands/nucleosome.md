@@ -1,7 +1,7 @@
 # easyepi nucleosome
 
 ```bash
-easyepi nucleosome --bigwig mnase.bw --chrom chr1 --start 0 --end 5000000 --out nuc/
+easyepi nucleosome --bigwig mnase.bw --out nuc/
 ```
 
 ## Options
@@ -9,9 +9,9 @@ easyepi nucleosome --bigwig mnase.bw --chrom chr1 --start 0 --end 5000000 --out 
 | flag | required | default | description |
 | --- | --- | --- | --- |
 | `--bigwig` | required |  | occupancy track (bigWig); for dyad calls from paired-end BAM use nucleosome-positioning |
-| `--chrom` | required |  |  |
-| `--start` | optional |  |  |
-| `--end` | required |  |  |
+| `--chrom` | required |  | contig name as written in the bigWig, e.g. chr1 |
+| `--start` | optional |  | 0-based, inclusive start (default 0) |
+| `--end` | required |  | 0-based, exclusive end of the region to summarise |
 | `--bin-size` | optional | `10` | bin width in bp (default 10) |
 | `--out` | required |  | output directory for nucleosome results |
 | `--figure-format` | optional |  | Export format for figures; repeat to export several. Default: pdf (vector) |

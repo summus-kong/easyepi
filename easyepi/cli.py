@@ -32,8 +32,7 @@ MINIMAL_EXAMPLE: dict[str, str] = {
               "--motifs jaspar.pfm --out motifs/",
     "footprint": "easyepi footprint --bigwig cut.bw --target sites.bed "
                  "--chrom chr1 --start 0 --end 1000000 --out fp/",
-    "nucleosome": "easyepi nucleosome --bigwig mnase.bw "
-                  "--chrom chr1 --start 0 --end 5000000 --out nuc/",
+    "nucleosome": "easyepi nucleosome --bigwig mnase.bw --out nuc/",
     "nucleosome-positioning": "easyepi nucleosome-positioning --bam paired.bam "
                               "--chrom chr1 --start 0 --end 1000000 --out np/",
     "gene-panel": "easyepi gene-panel --bigwig a.bw,b.bw --gtf genes.gtf "
@@ -708,9 +707,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_nuc.add_argument("--bigwig", required=True,
                        help="occupancy track (bigWig); for dyad calls from "
                             "paired-end BAM use nucleosome-positioning")
-    p_nuc.add_argument("--chrom", required=True)
-    p_nuc.add_argument("--start", type=int, default=0)
-    p_nuc.add_argument("--end", type=int, required=True)
+    p_nuc.add_argument("--chrom", required=True,
+                       help="contig name as written in the bigWig, e.g. chr1")
+    p_nuc.add_argument("--start", type=int, default=0,
+                       help="0-based, inclusive start (default 0)")
+    p_nuc.add_argument("--end", type=int, required=True,
+                       help="0-based, exclusive end of the region to summarise")
     p_nuc.add_argument("--bin-size", type=int, default=10, dest="bin_size",
                        help="bin width in bp (default 10)")
     p_nuc.add_argument("--out", required=True,
@@ -722,32 +724,54 @@ def build_parser() -> argparse.ArgumentParser:
         "nucleosome-positioning",
         help="call nucleosome positions from paired-end fragment dyad density")
     p_np.add_argument("--bam", required=True,
-                      help="coordinate-sorted paired-end BAM (MNase-seq or ATAC-seq)")
-    p_np.add_argument("--chrom", required=True)
-    p_np.add_argument("--start", type=int, required=True)
-    p_np.add_argument("--end", type=int, required=True)
-    p_np.add_argument("--bin-size", type=int, default=10, dest="bin_size")
+                      help="coordinate-sorted paired-end BAM (MNase-seq or ATAC-seq). "
+                           "Single-end input is refused: one cut site gives no fragment "
+                           "span, so the dyad cannot be located. Use `easyepi nucleosome` "
+                           "for a measured occupancy signal instead")
+    p_np.add_argument("--chrom", required=True,
+                      help="contig name as written in the BAM header, e.g. chr1")
+    p_np.add_argument("--start", type=int, required=True,
+                      help="0-based, inclusive start of the region to call")
+    p_np.add_argument("--end", type=int, required=True,
+                      help="0-based, exclusive end of the region to call")
+    p_np.add_argument("--bin-size", type=int, default=10, dest="bin_size",
+                      help="dyad density bin width in bp (default 10); spacing and "
+                           "fuzziness are reported in bp, not bins")
     p_np.add_argument("--min-length", type=int, default=120, dest="min_length",
                       help="minimum fragment length kept (default 120 bp)")
     p_np.add_argument("--max-length", type=int, default=200, dest="max_length",
                       help="maximum fragment length kept (default 200 bp)")
-    p_np.add_argument("--smooth-bins", type=int, default=3, dest="smooth_bins")
+    p_np.add_argument("--smooth-bins", type=int, default=3, dest="smooth_bins",
+                      help="running-mean window in bins applied to the dyad density "
+                           "before peak calling (default 3)")
     p_np.add_argument("--mad-k", type=float, default=2.0, dest="mad_k",
                       help="call threshold in scaled MADs above the median")
     p_np.add_argument("--min-spacing", type=int, default=100, dest="min_spacing",
                       help="minimum bp between accepted calls (default 100)")
-    p_np.add_argument("--min-height", type=float, default=0.0, dest="min_height")
+    p_np.add_argument("--min-height", type=float, default=0.0, dest="min_height",
+                      help="absolute floor on the smoothed dyad density a call must "
+                           "reach, in density units (default 0 = no absolute floor; "
+                           "the relative floor below still applies)")
     p_np.add_argument("--min-relative-height", type=float, default=0.05,
                       dest="min_relative_height",
                       help="fraction of the strongest peak a call must reach "
                            "(default 0.05); guards against noise when MAD is 0")
     p_np.add_argument("--fuzziness-fraction", type=float, default=0.5,
-                      dest="fuzziness_fraction")
+                      dest="fuzziness_fraction",
+                      help="fraction of a dyad cluster's signal the reported span must "
+                           "cover, measured outward from the peak (default 0.5)")
     p_np.add_argument("--fuzziness-radius", type=int, default=150,
-                      dest="fuzziness_radius")
+                      dest="fuzziness_radius",
+                      help="how far either side of a peak the span search may reach, "
+                           "in bp (default 150, about one nucleosome plus linker). "
+                           "Values near the neighbour spacing push the span to the cap")
     p_np.add_argument("--max-fragments", type=int, default=2000000,
-                      dest="max_fragments")
-    p_np.add_argument("--min-mapq", type=int, default=30, dest="min_mapq")
+                      dest="max_fragments",
+                      help="cap on fragments read from the region before density is "
+                           "built (default 2000000); raise it for deep sequencing")
+    p_np.add_argument("--min-mapq", type=int, default=30, dest="min_mapq",
+                      help="minimum mapping quality for a fragment to be used "
+                           "(default 30)")
     p_np.add_argument("--out", required=True,
                    help="output directory for positioning results")
     add_figure_args(p_np)
