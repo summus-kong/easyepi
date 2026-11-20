@@ -21,7 +21,7 @@ easyepi nucleosome-positioning --bam paired.bam --chrom chr1 --start 0 --end 100
 | `--min-height` | optional |  |  |
 | `--min-relative-height` | optional | `0.05` | fraction of the strongest peak a call must reach (default 0.05); guards against noise when MAD is 0 |
 | `--fuzziness-fraction` | optional | `0.5` |  |
-| `--fuzziness-radius` | optional | `500` |  |
+| `--fuzziness-radius` | optional | `150` |  |
 | `--max-fragments` | optional | `2000000` |  |
 | `--min-mapq` | optional | `30` |  |
 | `--out` | required |  | output directory for positioning results |
