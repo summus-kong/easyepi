@@ -2,7 +2,7 @@
 
 ## 0.6.0 - unreleased
 
-### Added
+### Changed
 
 - **Coverage metadata names the counting unit.** `bam2bw` now writes a
   `counting` block into the `.bw.json` with `unit`, `fragments`,
@@ -12,6 +12,165 @@
   records carry no mate reports `read`. The cut-site path (`--assay atac`)
   counts read ends, so it writes no block at all rather than naming a unit it
   did not use.
+- **`easyepi dmr` no longer needs R.** The per-site test for designs with two
+  or more replicates per group is now a pure numpy/scipy reimplementation of
+  `DSS::DMLtest(smoothing = TRUE)`, including DSS's shrunken dispersion
+  (`est.prior.BSseq.logN` + `dispersion.shrinkage.BSseq`). Verified against
+  DSS 2.58.0 intermediate by intermediate on a 300-site, two-chromosome,
+  irregularly spaced fixture: smoothed levels 5e-16, weighted levels 7.5e-12,
+  `phi` 1.8e-11, variances 1.3e-13, `diff` 7.5e-12, `se` 1.5e-12, `pval`
+  1.1e-10, and the identical set of sites called at p < 0.05. The oracle
+  (`tests/oracle/dss_oracle.R`) asserts internally that its own step-by-step
+  chain equals `DMLtest` to 1e-12 before any comparison is made.
+  `easyepi/dmr_r.py` is kept and still correct, but nothing on the product
+  path imports it. Details and the six transcription traps:
+  `docs/dev/DSS_REPLACEMENT_PLAN.md`.
+
+- **The variance kernel is 2.7x faster, with identical numbers.** Profiling put
+  `rho ** lag` at 60% of the per-site kernel body (96.4 of 116.6 us/site at ~101
+  CpG per 500 bp window) for an exponent that only takes the integers
+  `0 .. span//50 + 1`. A lookup table replaces it exactly -- verified with
+  `array_equal`, not a tolerance. `nitem_bin` was still a Python two-pointer
+  loop; sorted positions make it two binary searches, 20.6 ms -> 1.0 ms per 20k
+  sites. Total: 379 us/site -> 139 us/site, i.e. 5.9 h -> 2.2 h extrapolated for
+  a 28M-CpG genome against two groups. All five DSS oracle comparisons were
+  re-run afterwards and every intermediate is unchanged. Numbers and the stage
+  breakdown: `docs/dev/DSS_REPLACEMENT_PLAN.md`.
+
+- **`easyepi dmr --no-smoothing` exposes DSS's unsmoothed site test.**
+  `DMLtest(smoothing = FALSE)` is a separate code path in DSS, not a span of
+  zero: `compute.mean.noSmooth` drops the window but keeps the pseudocount,
+  `compute.waldStat.noSmooth` divides per-replicate sums by `rowSums(n)^2`,
+  and the variance floor is `1e-05` one-sided instead of `1e-04` two-sided.
+  Both floors are kept as separate functions rather than one shared helper,
+  because reusing the smoothed one would change every low-coverage p-value.
+  The flag only reaches the beta-binomial branch: with fewer than two
+  replicates per group the pooled test still runs and still says so.
+
+- **All five `DMLtest` modes are now compared against DSS numerically**, not
+  just the default one: `smoothing` x `equal.disp` (four combinations) plus
+  the one-replicate case that `DSS:::DMLtest.noSmooth` resolves by sharing a
+  dispersion. Every mode agrees on every intermediate -- smoothed and
+  unsmoothed levels 5e-16, `phi` 1.9e-11, variances 1.5e-12, `se` 1.5e-11,
+  `pval` 1.2e-10 -- and on the set of sites called at p < 0.05.
+  `tests/oracle/compare_modes.py` prints the whole table.
+
+- **`DMLtest` and `DSS:::DMLtest.noSmooth` disagree about legal inputs.**
+  The public function rejects `smoothing = FALSE` with one replicate per
+  group ("There is no biological replicates in at least one condition"),
+  while the internal one handles it. The oracle takes a `direct` route to
+  reach that branch; Python reports `equal_disp` as what was used, not as
+  what the caller asked for.
+- **The three DSS smoothing kernels are reimplemented in numpy**, so the
+  package compiles nothing at install or run time and no longer carries a
+  `ctypes` build probe or a C source file. `tests/test_dss_kernels.py` checks
+  each one against a literal transcription of the C loops across window widths
+  1-500 and uniform, irregular and duplicate site spacing. One behavioural
+  difference is real and preserved: `compute_var_smooth.c` treats the window's
+  right edge as exclusive while `filter.c` treats the same half-widths as
+  inclusive.
+
+- **The replicate-aware DMR path now passes real genomic coordinates.** The
+  old R bridge handed DSS a fabricated `chr1` with positions `1..n_sites`,
+  which put every smoothing window on a one-base-per-site axis; `hasCoverage`
+  and the window kernel are both genomic, so the fabricated axis changed which
+  sites were tested. It also applies DSS's own `hasCoverage` filter (both
+  groups, `ws = 200`, threshold `2 * n_samples`) before computing anything,
+  because the dropped sites move every later window. Dropped sites come back
+  as `NaN` with `tested == False` and are excluded before BH correction, and
+  `stats["dropped_by_dss_coverage_filter"]` counts them.
+
+- **`annotated.tsv` gained `flank_txIds` / `flank_geneIds` / `flank_gene_distances`**
+  behind `--add-flank-info` and `--flank-distance` (default 5000), mirroring
+  `annotatePeak(addFlankGeneInfo=TRUE)`. The id lists match ChIPseeker; the
+  distances deliberately do not. The reference writes
+  `hitInfo$distance[subjectHits(overlapHit)] <- 0`, dropping `queryHits`, so a
+  feature that sits in several peaks' windows has its overlap attributed to the
+  wrong peak's row. On 3003 real peaks that mislabels 11% of the entries and
+  touches 24.7% of the peaks (measured by `benchmark/a10/scripts/flank_defect.R`;
+  present in 1.46.1 and unchanged in 1.49.5). EasyEpi keeps `queryHits` and
+  reports the distance to the peak the feature is actually listed under, rather
+  than reproducing a wrong answer.
+
+- **`annotated.tsv` now carries annotatePeak's full column set.** 14 columns at
+  `--level transcript` (`seqnames,start,end,width,strand,annotation,geneChr,
+  geneStart,geneEnd,geneLength,geneStrand,geneId,transcriptId,distanceToTSS`)
+  and 13 at `--level gene`, where `transcriptId` does not exist. Column names
+  follow the pandas-safe spellings (`chrom` for `seqnames`, `tss_distance` for
+  `distanceToTSS`) and the values are the reference's own.
+
+- **`start` is now the 1-based GRanges coordinate**, not BED's 0-based offset:
+  `annotatePeak` writes `start(peak)`, so a BED row beginning at 713700 appears
+  as 713701. `width` stays `end - start`.
+- **`easyepi annotate` now reproduces ChIPseeker's `sameStrand` and `level`.**
+  `--same-strand` and `--level {transcript,gene}` mirror `annotatePeak`'s
+  arguments. Verified against ChIPseeker 1.46.1 on a 400-peak set carrying
+  real `+`/`-` strands: all four (level, sameStrand) combinations agree on
+  400/400 labels and 400/400 `distanceToTSS`, end to end through the CLI.
+
+- **Strand is read from BED column 6 only when it is `+` or `-`.** In a
+  narrowPeak that column holds `signalValue`, so reading it positionally
+  turns every peak into `*` -- which is exactly what ChIPseeker's own
+  `readPeakFile` does, and why the strand paths went untested until now.
+
+- **`easyepi annotate` now emits ChIPseeker's exact labels and feature table.**
+  `annotated.tsv` carries the reference strings verbatim --
+  `Promoter (<=1kb)`, `Exon (T1/G1, exon 2 of 4)`, `3' UTR`,
+  `Downstream (<=300bp)` -- and the new `annotation_stat.tsv` is a port of
+  `getAnnoStat(annotatePeak(...))`: percentages over the reference's own
+  category set (Promoter sub-categories kept, exons/introns split into
+  1st/Other, `Downstream` its own row). Verified byte-identical to ChIPseeker
+  1.46.1 on 600 peaks at +/-3 kb and +/-5 kb.
+
+  `annotation_bins.tsv` (six coarse bins, fractions) is **removed**: keeping a
+  second, non-reference vocabulary alongside the exact one invited
+  disagreement. Labels and distances match ChIPseeker on 100% of 23,646 peaks
+  across 12 data sets.
+
+- `annotate`'s `--promoter-upstream`, `--promoter-downstream` and
+  `--no-bins-summary` were parsed and then ignored; they now reach the
+  classifier. `--downstream-distance` was added.
+
+- `annotate` gains `--annotated-name` and `--stat-name` so the two output
+  tables can be named for downstream joins.
+
+### Added (repository completeness and tooling)
+
+- **Six modules the package imported were never tracked.** `annotate/__init__.py`
+  imports `chipseeker_rules` and `tx_features`, `dmr.py` imports
+  `dmr_replicate_aware`, and `cli.py` imports `qc_html`; none of them were in the
+  repository, so a clone failed at import while the README described code that
+  could not be checked out. `gtf_reader` and `dmr_r` are tracked as well even
+  though nothing imports them today -- `gtf_reader` records why the transcript
+  reader was rewritten once already: the GTF-only version ran 740 s on GENCODE
+  v50 and silently turned every GFF3 exon into its own transcript, which made
+  Intron and 5'UTR come out as exactly zero.
+
+- **`scripts/txdb_to_gtf.R`** exports a TxDb with one consistent transcript-id
+  namespace. `rtracklayer::export()` writes the TxDb's own tables and does not
+  expand the per-transcript GRangesLists, so the result has exon and CDS rows but
+  zero UTR rows, and a peak inside a UTR can only fall through to Promoter or
+  Intron. It also leaves two namespaces in one file -- `transcripts()` returns an
+  unnamed GRanges while every `*ByTranscript()` accessor names its elements by
+  internal numeric tx_id -- so a naive export writes transcript rows as ENST...
+  and exon rows as "1", where nothing links up. That is the failure the
+  annotation benchmark inherited: zero linkable exon ids across 412,044
+  transcripts. The exporter keys everything by tx_name.
+
+- **ENCODE acquisition scripts** (`scripts/encode_*.py`, `fetch_small_bams.py`,
+  `verify_pilot_bams.py`) and `benchmark/annotation/` for the R side of the
+  annotation comparison. `fetch_small_bams.py` retries per attempt so one dropped
+  connection does not lose the whole set; `verify_pilot_bams.py` runs before any
+  analysis touches the files.
+
+- **Invariant tests that were only described in comments**:
+  `test_coordinate_contract.py` (which convention each layer uses, 1-based closed
+  vs 0-based half-open), `test_boundary_oracles.py` (where the promoter window is
+  clamped), `test_gff3_multi_parent.py` (a GFF3 child with several parents reaches
+  all of them), `test_histone_state_window.py`, `test_dmr_replicate_aware.py`.
+
+### Added
+
 - **`easyepi concordance`**: replicate concordance between samples, as a
   subcommand. `--peaks` takes one peak file per sample and reports pairwise
   correlation *and* region-set Jaccard; `--matrix` takes the `diff --counts`
@@ -101,6 +260,70 @@
   be shown in `<img>`, and the guard meant to add a raster format tested
   `figure_formats` for `None` instead of testing the resolved list, so it did
   nothing whenever that list was non-empty.
+
+### Fixed (signal tracks, DMR model statements)
+
+- **`bam2bigwig` normalisation and duplicate handling were implicit.** Three
+  choices changed the track scale while the argument for them was unstated: the
+  denominator a track is normalised by, whether duplicate reads are kept, and how
+  a proper pair contributes. `tests/test_bam2bigwig_denominator.py` now pins the
+  first -- a track built from one chromosome must not silently use that
+  chromosome's mapped count as the whole-genome depth -- and
+  `test_paired_end_parity.py` pins the third. `--keep-dup-all` is documented as
+  what it is: MACS3 `--keep-dup all`, which thresholds on the number of reads
+  sharing a coordinate, not on the BAM duplicate flag.
+
+- **The DMR run summary described the wrong model.** Its `method` and
+  `limitation` fields were hard-coded to the pooled binomial text, so a
+  replicate-aware run wrote "binomial-based, not beta-binomial" into
+  `<out>.json` about its own beta-binomial output. Both fields are now
+  conditional on the model that actually ran, and
+  `tests/test_dmr_summary_is_honest.py` pins the branches apart.
+- **The DMR page stated `--pooled` as if it modelled replicates.** It does not:
+  the pooled-binomial site test sums each group's per-site counts before testing,
+  so it sees no between-replicate variance and is not a beta-binomial model.
+  Measured p-values are therefore anti-conservative on heterogeneous replicates.
+  The flag stays, because reproducing an older run is a legitimate use, and the
+  command page now says which one it is.
+
+- **`diffpeaks` described its test only by family.** It is a negative-binomial GLM
+  Wald test with a single common dispersion, estimated by moments from
+  within-group residuals and shrunk toward zero. That is the same family as
+  DESeq2's default and not the same procedure; the module now states the
+  difference where the statistic is produced, so a reader does not attribute one
+  result to the other.
+
+- **`easyepi diff --method deseq2` needed a hand-assembled environment.**
+  `pyproject.toml` gains a `deseq2` extra (`pydeseq2>=0.5`) and lists it in
+  `all`, so a clean install can run the documented model instead of being told at
+  runtime to pip-install it. The sign convention is part of the contract and is
+  stated where it is produced: log2(A / B), so a feature that doubles in group B
+  reports about -1.
+
+### Fixed (TSS enrichment and duplicate handling)
+
+- **TSS enrichment counted both mates of a pair.** A proper pair has two mates
+  that are the two ends of the *same* fragment, so piling both 5' ends up doubles
+  the score relative to single-end data and makes the reported number depend on
+  library layout rather than on the biology. Read1 only is now kept, which is the
+  convention `coverage_parallel` already used, so the TSS track and the coverage
+  track agree on what one fragment contributes.
+
+- **Two TSS enrichment definitions shared one threshold.** `tss_enrichment` is
+  measured from BAM read 5' ends in +-25 bp over the outer 100 bp;
+  `tss_enrichment_bigwig` from +-100 bp over the 1900-2000 bp ring. They are the
+  same quantity measured two ways, not two pieces of evidence, and sharing the
+  shipped ENCODE floor of 2.0 was wrong in both directions: applied to the BAM
+  definition the floor is no floor at all (one library scored 1220.08, so nothing
+  would ever breach it), and letting a sample report both lets the better of two
+  scales decide the verdict. The BigWig rule is now skipped whenever the BAM rule
+  was evaluated, and `qc_payload` records a `tss_enrichment_disagreement` block
+  naming both window definitions when the two differ by more than 3x.
+
+- **`qc --annotation` was documented and ignored.** TSS enrichment accepted only
+  `--tss`, so the obvious invocation -- pointing at the annotation the QC page
+  itself describes -- silently produced no score. `--annotation` is now read as a
+  TSS source too; `--tss` still wins when both are given.
 
 ### Fixed (found while building it)
 
