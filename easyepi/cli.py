@@ -332,9 +332,9 @@ def _cmd_assay_qc(args):
 def _add_runtime_args(parser):
     """Add shared project, logging and reproducibility parameters."""
     parser.add_argument("--project", default=None, help="Project TOML or TSV sample manifest")
-    parser.add_argument("--out", required=True, help="output directory")
+    parser.add_argument("--out", required=True, help="directory to write the run outputs into; created if absent, and a status.json recording the resolved inputs lands at its root")
     parser.add_argument("--genome", default=None, help="reference genome FASTA")
-    parser.add_argument("--annotation", default=None, help="GTF/GFF annotation")
+    parser.add_argument("--annotation", default=None, help="gene annotation (GTF/GFF) used to restrict and label the TSS and feature summaries; without it only whole-genome metrics are reported")
     parser.add_argument("--blacklist", default=None,
                         help="ENCODE-style blacklist BED; enables blacklist_fraction QC")
     parser.add_argument("--marker", default=None,
@@ -349,7 +349,7 @@ def _add_runtime_args(parser):
     parser.add_argument("--assay", default=None, help="assay label for direct command-line input")
     parser.add_argument("--no-check-files", action="store_true", help="only validate schema, not file existence")
     parser.add_argument("--verbose", action="store_true", help="write detailed logs/run.log")
-    parser.add_argument("--log-file", default=None, help="optional detailed log file path")
+    parser.add_argument("--log-file", default=None, help="also write a detailed log to this path; omitted, only status.json records the run")
     parser.add_argument("--quiet", action="store_true", help="disable panel log output")
     parser.add_argument("--threads", type=int, default=1, help="threads recorded for this module")
     parser.add_argument("--seed", type=int, default=1, help="random seed recorded for reproducibility")
@@ -414,7 +414,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_b2.add_argument("bam", nargs="+",
                       help="coordinate-sorted BAM file(s)")
     p_b2.add_argument("-o", "--out", required=True,
-                      help="output directory for one track per sample")
+                      help="directory receiving one signal track per sample plus status.json")
     p_b2.add_argument("--output-file", default=None, dest="output_file",
                       help="explicit BigWig path; only valid with a single BAM")
     p_b2.add_argument("--assay", default=None, choices=list(ASSAY_CHOICES_FOR_CLI),
@@ -449,7 +449,7 @@ def build_parser() -> argparse.ArgumentParser:
         "init",
         help="write a project file from a folder, detecting samples and assays")
     p_i.add_argument("source", help="folder holding BAM/BigWig/peak files")
-    p_i.add_argument("--out", required=True, help="project TOML to write")
+    p_i.add_argument("--out", required=True, help="path of the project TOML to create; refuses to overwrite an existing file")
     p_i.add_argument("--project-id", default=None, dest="project_id",
                      help="identifier written to project.json; defaults to the output directory name")
     p_i.add_argument("--genome-build", default=None, dest="genome_build",
@@ -472,7 +472,7 @@ def build_parser() -> argparse.ArgumentParser:
                       help="folder scanned for *.bam / *.bw / *.bigWig and peak "
                            "files; each sample becomes <stem>. Saves listing every "
                            "file by hand")
-    p_qc.add_argument("--out", required=True, help="output JSON report file path")
+    p_qc.add_argument("--out", required=True, help="path of the JSON report to write; the parent directory must already exist")
     # Assay is optional: when omitted the command stays a generic BAM summary.
     # The choices are listed so `--help` shows them and argparse rejects a typo,
     # which is what used to produce a report with an empty assay_qc.
@@ -555,7 +555,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_dm.add_argument("--min-sites", type=int, default=1, dest="min_sites",
                       help="minimum significant sites per reported region")
     p_dm.add_argument("--out", required=True,
-                      help="output DMR table file path (.sites.tsv and .json are written beside it)")
+                      help="path of the per-site DMR table; the run summary JSON and the region table are written beside it")
     p_dm.set_defaults(func=_cmd_dmr)
 
     p_norm = sub.add_parser("normalize", help="signal / count normalization")
@@ -568,7 +568,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_norm.add_argument("--fragment-length", type=float,
                         help="average fragment length in bp; with rpgc this scales by read length / fragment length. Omit to use read length alone")
     p_norm.add_argument("--out", required=True,
-                     help="output directory for the normalised tables")
+                     help="directory for the normalised tables plus status.json")
     add_figure_args(p_norm)
     p_norm.set_defaults(func=_cmd_normalize)
 
@@ -578,7 +578,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_pk.add_argument("bam", nargs="+", help="treatment BAM(s), coordinate-sorted")
     p_pk.add_argument("-c", "--control", action="append", default=None,
                       help="control BAM(s); repeatable or comma-separated")
-    p_pk.add_argument("-o", "--out", required=True, help="output directory")
+    p_pk.add_argument("-o", "--out", required=True, help="directory to write the run outputs into; created if absent, and a status.json recording the resolved inputs lands at its root")
     from easyepi.peaks_cli import ASSAY_CHOICES as PEAK_ASSAY_CHOICES
 
     # MACS3 has no bisulfite mode, so `methylation` is not offered here; the list
@@ -659,7 +659,7 @@ def build_parser() -> argparse.ArgumentParser:
                       help="annotation unit, as annotatePeak(level=): "
                            "transcript (default) or gene")
     p_an.add_argument("--out", required=True,
-                   help="output directory for annotation tables")
+                   help="directory for the annotation tables; one TSV per input plus status.json at its root")
     add_figure_args(p_an)
     p_an.set_defaults(func=_cmd_annotate)
 
@@ -675,7 +675,7 @@ def build_parser() -> argparse.ArgumentParser:
                       help="auto/homer require HOMER; native is a legacy exploratory method")
     p_mo.add_argument("--homer-dir", default=None, help="path to HOMER share/homer dir (migrated install)")
     p_mo.add_argument("--out", required=True,
-                   help="output directory for motif tables and figures")
+                   help="directory for the motif tables and figures plus status.json")
     add_figure_args(p_mo)
     p_mo.set_defaults(func=_cmd_motifs)
 
@@ -689,7 +689,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_fp.add_argument("--flank", type=int, default=100, help="flank around each site (bp, default 100)")
     p_fp.add_argument("--title", default="TF footprint",
                        help="figure title (default \"TF footprint\"); set it per comparison so published panels are distinguishable")
-    p_fp.add_argument("--out", required=True, help="output directory")
+    p_fp.add_argument("--out", required=True, help="directory to write the run outputs into; created if absent, and a status.json recording the resolved inputs lands at its root")
     add_figure_args(p_fp)
     p_fp.set_defaults(func=_cmd_footprint)
 
@@ -714,7 +714,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_tf.add_argument("--top", type=int, default=5,
                       help="hits reported per peak (default 5)")
     p_tf.add_argument("--out", required=True,
-                   help="output directory for TF annotation tables")
+                   help="directory for the TF annotation tables and status.json")
     add_figure_args(p_tf)
     p_tf.set_defaults(func=_cmd_tf_annotate)
 
@@ -733,7 +733,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_nuc.add_argument("--bin-size", type=int, default=10, dest="bin_size",
                        help="bin width in bp (default 10)")
     p_nuc.add_argument("--out", required=True,
-                       help="output directory for nucleosome results")
+                       help="directory for the occupancy metrics, the repeat estimate and status.json")
     add_figure_args(p_nuc)
     p_nuc.set_defaults(func=_cmd_nucleosome)
 
@@ -790,7 +790,7 @@ def build_parser() -> argparse.ArgumentParser:
                       help="minimum mapping quality for a fragment to be used "
                            "(default 30)")
     p_np.add_argument("--out", required=True,
-                   help="output directory for positioning results")
+                   help="directory for nucleosome_positions.bed, nucleosome_positions.json and status.json")
     add_figure_args(p_np)
     p_np.set_defaults(func=_cmd_nucleosome_positioning)
 
@@ -823,7 +823,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_gp.add_argument("--title", default=None,
                        help="figure title; omitted when not given")
     p_gp.add_argument("--out", required=True,
-                   help="output directory for panel tables and figures")
+                   help="directory for the panel tables and figures plus status.json")
     add_figure_args(p_gp)
     p_gp.set_defaults(func=_cmd_gene_panel)
 
@@ -851,7 +851,7 @@ def build_parser() -> argparse.ArgumentParser:
                       help="bp overlap needed to merge peaks into one region (default 1)")
     p_dp.add_argument("--min-mapq", type=int, default=30, dest="min_mapq",
                        help="minimum mapping quality for a count to enter the model (default 30)")
-    p_dp.add_argument("--out", required=True, help="output TSV file path")
+    p_dp.add_argument("--out", required=True, help="path of the TSV to write; the parent directory must already exist")
     p_dp.set_defaults(func=_cmd_diffpeaks)
 
     p_hs = sub.add_parser(
@@ -884,7 +884,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_hs.add_argument("--seed", type=int, default=0,
                        help="random seed for state initialisation (default 0, so reruns agree)")
     p_hs.add_argument("--out", required=True,
-                   help="output directory for state tables and figures")
+                   help="directory for the state tables, the segment BED and status.json")
     p_hs.set_defaults(func=_cmd_histone_states)
 
     p_df = sub.add_parser("diff", help="design-aware differential analysis")
@@ -912,7 +912,7 @@ def build_parser() -> argparse.ArgumentParser:
                       help="test every feature, skipping DESeq2 independent "
                            "filtering; deseq2 only")
     p_df.add_argument("--out", required=True,
-                   help="output TSV for the comparison table")
+                   help="path of the comparison table to write; the parent directory must already exist")
     add_figure_args(p_df)
     p_df.set_defaults(func=_cmd_diff)
 
@@ -938,12 +938,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_cc.add_argument("--min-samples", type=int, default=2, dest="min_samples",
                       help="refuse to run with fewer samples than this (default 2)")
     p_cc.add_argument("--out", required=True,
-                      help="output directory for concordance.json, "
-                           "concordance_pairs.tsv and figures")
+                      help="directory for concordance.json, the pairwise TSV and the figures; created if absent")
     p_cc.add_argument("--verbose", action="store_true",
                       help="write detailed logs/run.log")
     p_cc.add_argument("--log-file", default=None,
-                      help="optional detailed log file path")
+                      help="also write a detailed log to this path; omitted, only status.json records the run")
     p_cc.add_argument("--quiet", action="store_true",
                       help="disable panel log output")
     add_figure_args(p_cc)
@@ -953,7 +952,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_vz.add_argument("--regions", required=True,
                        help="region file (chrom/start/end[/name]) plotted as rows")
     p_vz.add_argument("--out", required=True,
-                   help="output directory for figures")
+                   help="directory for the figures plus status.json")
     add_figure_args(p_vz)
     p_vz.set_defaults(func=_cmd_viz)
 
@@ -970,7 +969,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_merge.add_argument("reports", nargs="+",
                          help="qc_report.json paths, directories, or globs "
                               "(e.g. 'batch_*/qc_report.json')")
-    p_merge.add_argument("--out", required=True, help="output merged JSON path")
+    p_merge.add_argument("--out", required=True, help="path of the merged report JSON to write")
     p_merge.add_argument("--no-html", action="store_true", dest="no_html",
                          help="do not write the batch HTML report beside the JSON")
     p_merge.set_defaults(func=_cmd_merge_qc_reports)
@@ -1012,7 +1011,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_int.add_argument("--gene-bed", required=True, help="BED4+ gene intervals; BED6 strand is used when available")
     p_int.add_argument("--track", action="append", required=True, metavar="NAME=BIGWIG",
                        help="named BigWig track; repeat for each assay/sample summary")
-    p_int.add_argument("--out", required=True, help="output directory")
+    p_int.add_argument("--out", required=True, help="directory to write the run outputs into; created if absent, and a status.json recording the resolved inputs lands at its root")
     p_int.add_argument("--clusters", type=int, default=4, help="K-means cluster count (default: 4)")
     p_int.add_argument("--seed", type=int, default=1, help="random seed recorded in manifest")
     p_int.add_argument("--peaks", default=None, help="optional contrast-specific BED to link to nearest TSS")
@@ -1024,7 +1023,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_washu = sub.add_parser("washu", help="export WashU Epigenome Browser tracks & URL")
     p_washu.add_argument("--manifest", required=True, help="TSV: name<tab>bigwig<tab>group[<tab>peak_file]")
-    p_washu.add_argument("--out", required=True, help="output dir for hub JSON + README")
+    p_washu.add_argument("--out", required=True, help="directory receiving the track hub JSON and its README")
     p_washu.add_argument("--genome", default="hg38", help="WashU genome name (default hg38)")
     p_washu.add_argument("--base-url", default=None, help="http(s) base URL serving the track files")
     p_washu.set_defaults(func=_cmd_washu)

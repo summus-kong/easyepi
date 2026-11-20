@@ -12,7 +12,7 @@ easyepi qc --assay atac --bam sample.bam --out qc.json
 | `--bigwig` | optional |  | BigWig signal(s); repeatable and/or comma-separated. Enables assay-level metrics |
 | `--peak` | optional |  | BED/narrowPeak(s); repeatable and/or comma-separated. Enables FRiP and peak metrics |
 | `--input-dir` | optional |  | folder scanned for *.bam / *.bw / *.bigWig and peak files; each sample becomes <stem>. Saves listing every file by hand |
-| `--out` | required |  | output JSON report file path |
+| `--out` | required |  | path of the JSON report to write; the parent directory must already exist |
 | `--tss` | optional |  | TSV of transcription start sites (chrom, tss[, strand]) for TSS enrichment; requires --bam and an ATAC assay |
 | `--tss-flank` | optional | `2000` | half-width of the TSS window in bp (default 2000) |
 | `--no-html` | optional |  | do not write the self-contained HTML report beside the JSON |

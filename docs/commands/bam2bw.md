@@ -9,7 +9,7 @@ easyepi bam2bw sample.bam -o tracks/ --assay atac
 | flag | required | default | description |
 | --- | --- | --- | --- |
 | bam | required |  | coordinate-sorted BAM file(s) |
-| `-o`, `--out` | required |  | output directory for one track per sample |
+| `-o`, `--out` | required |  | directory receiving one signal track per sample plus status.json |
 | `--output-file` | optional |  | explicit BigWig path; only valid with a single BAM |
 | `--assay` | optional |  | sets sensible defaults for shift/bin-size/normalize |
 | `--shift` | optional |  | tn5 applies the +4/-5 cut-site shift (ATAC/CUT&Tag) |

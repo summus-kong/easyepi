@@ -24,7 +24,7 @@ easyepi nucleosome-positioning --bam paired.bam --chrom chr1 --start 0 --end 100
 | `--fuzziness-radius` | optional | `150` | how far either side of a peak the span search may reach, in bp (default 150, about one nucleosome plus linker). Values near the neighbour spacing push the span to the cap |
 | `--max-fragments` | optional | `2000000` | cap on fragments read from the region before density is built (default 2000000); raise it for deep sequencing |
 | `--min-mapq` | optional | `30` | minimum mapping quality for a fragment to be used (default 30) |
-| `--out` | required |  | output directory for positioning results |
+| `--out` | required |  | directory for nucleosome_positions.bed, nucleosome_positions.json and status.json |
 | `--figure-format` | optional |  | Export format for figures; repeat to export several. Default: pdf (vector) |
 | `--no-figures` | optional |  | Do not write figures; only tables and JSON are produced |
 | `--verbose` | optional |  | Write detailed logs/run.log |

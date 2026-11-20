@@ -10,7 +10,7 @@ easyepi peaks sample.bam -o peaks/ --assay atac
 | --- | --- | --- | --- |
 | bam | required |  | treatment BAM(s), coordinate-sorted |
 | `-c`, `--control` | optional |  | control BAM(s); repeatable or comma-separated |
-| `-o`, `--out` | required |  | output directory |
+| `-o`, `--out` | required |  | directory to write the run outputs into; created if absent, and a status.json recording the resolved inputs lands at its root |
 | `--assay` | optional |  | sets format and broad/narrow defaults |
 | `--format` | optional |  | MACS3 format: BAM, BAMPE, BED, BEDPE (default from --assay) |
 | `--genome` | optional | `hs` | MACS3 genome size: hs, mm, dm or a number (default hs) |

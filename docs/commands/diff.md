@@ -17,7 +17,7 @@ easyepi diff --counts counts.tsv --design design.tsv --method deseq2 --out diff/
 | `--ref-level` | optional |  | reference level for the group factor; defaults to the second level alphabetically; deseq2 only |
 | `--lfc-shrink` | optional |  | apply apeGLM-style LFC shrinkage; deseq2 only |
 | `--no-independent-filter` | optional |  | test every feature, skipping DESeq2 independent filtering; deseq2 only |
-| `--out` | required |  | output TSV for the comparison table |
+| `--out` | required |  | path of the comparison table to write; the parent directory must already exist |
 | `--figure-format` | optional |  | Export format for figures; repeat to export several. Default: pdf (vector) |
 | `--no-figures` | optional |  | Do not write figures; only tables and JSON are produced |
 | `--verbose` | optional |  | Write detailed logs/run.log |

@@ -22,7 +22,7 @@ easyepi dmr --group-a ctrl.bam --group-b trt.bam --out dmr/regions.tsv
 | `--pooled` | optional |  | force the pooled-binomial site test even when both groups have >=2 replicates. It ignores between-replicate variance, so p-values are anti-conservative with heterogeneous replicates; use only to reproduce an older run. |
 | `--no-smoothing` | optional |  | use DSS's unsmoothed site test (DMLtest smoothing=FALSE): the level and variance come from each site alone, not from a 500 bp window. It has its own variance floor (1e-05, one-sided), so p-values are not comparable with the default smoothed run. Smoothed is the default because pooling neighbouring CpGs is what makes single-site coverage usable. |
 | `--min-sites` | optional | `1` | minimum significant sites per reported region |
-| `--out` | required |  | output DMR table file path (.sites.tsv and .json are written beside it) |
+| `--out` | required |  | path of the per-site DMR table; the run summary JSON and the region table are written beside it |
 | `--verbose` | optional |  | Write detailed logs/run.log |
 | `--log-file` | optional |  | Detailed file log path |
 | `--quiet` | optional |  | Suppress panel logging |

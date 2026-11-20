@@ -13,9 +13,9 @@ easyepi concordance --peaks A1=peaks/A1.bed,A2=peaks/A2.bed --design design.tsv 
 | `--design` | required |  | design TSV with sample_id and group/condition |
 | `--method` | optional | `spearman` | correlation method (default: spearman) |
 | `--min-samples` | optional | `2` | refuse to run with fewer samples than this (default 2) |
-| `--out` | required |  | output directory for concordance.json, concordance_pairs.tsv and figures |
+| `--out` | required |  | directory for concordance.json, the pairwise TSV and the figures; created if absent |
 | `--verbose` | optional |  | write detailed logs/run.log |
-| `--log-file` | optional |  | optional detailed log file path |
+| `--log-file` | optional |  | also write a detailed log to this path; omitted, only status.json records the run |
 | `--quiet` | optional |  | disable panel log output |
 | `--figure-format` | optional |  | Export format for figures; repeat to export several. Default: pdf (vector) |
 | `--no-figures` | optional |  | Do not write figures; only tables and JSON are produced |

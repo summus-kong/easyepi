@@ -23,7 +23,7 @@ easyepi annotate --peaks peaks/sample/sample_peaks.narrowPeak --gtf genes.gtf --
 | `--flank-distance` | optional | `5000` | window in bp used by --add-flank-info (default 5000, as ChIPseeker flankDistance) |
 | `--same-strand` | optional |  | only consider features on the peak's own strand, as annotatePeak(sameStrand=TRUE) |
 | `--level` | optional | `transcript` | annotation unit, as annotatePeak(level=): transcript (default) or gene |
-| `--out` | required |  | output directory for annotation tables |
+| `--out` | required |  | directory for the annotation tables; one TSV per input plus status.json at its root |
 | `--figure-format` | optional |  | Export format for figures; repeat to export several. Default: pdf (vector) |
 | `--no-figures` | optional |  | Do not write figures; only tables and JSON are produced |
 | `--verbose` | optional |  | Write detailed logs/run.log |

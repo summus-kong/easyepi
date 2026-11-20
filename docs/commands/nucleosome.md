@@ -13,7 +13,7 @@ easyepi nucleosome --bigwig mnase.bw --chrom chr1 --start 0 --end 1000000 --out 
 | `--start` | optional |  | 0-based, inclusive start (default 0) |
 | `--end` | required |  | 0-based, exclusive end of the region to summarise |
 | `--bin-size` | optional | `10` | bin width in bp (default 10) |
-| `--out` | required |  | output directory for nucleosome results |
+| `--out` | required |  | directory for the occupancy metrics, the repeat estimate and status.json |
 | `--figure-format` | optional |  | Export format for figures; repeat to export several. Default: pdf (vector) |
 | `--no-figures` | optional |  | Do not write figures; only tables and JSON are produced |
 | `--verbose` | optional |  | Write detailed logs/run.log |
