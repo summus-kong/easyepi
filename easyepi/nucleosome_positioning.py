@@ -38,8 +38,8 @@ What this does not do
 It does not resolve overlapping nucleosomes, does not model the digestion
 kinetics, and does not call positions from ATAC-seq (which reports accessibility,
 not protection). Those need NucleoATAC or a template-based algorithm with a
-fitted linker-length model; see the module docstring in
-``easyepi/specific/mnase/positioning.py``.
+fitted linker-length model. NucleoATAC and MINCE are separate programs; this
+module is not a reimplementation of either.
 
 References
 ----------

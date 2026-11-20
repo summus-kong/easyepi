@@ -393,7 +393,7 @@ python -m easyepi.specific.mnase.qc --project mnase.toml --out results/mnase_qc
 python -m easyepi.specific.mnase.profile --signal signal.tsv --out results/mnase_profile
 ```
 
-`signal.tsv` is a single-column measured numeric signal vector. Occupancy and periodicity are descriptive summaries. `specific.mnase.positioning` now rejects execution because no established positioning backend has been connected. It no longer runs the unrelated ATAC peak caller. Nucleosome positioning and uncertainty estimates remain development work.
+`signal.tsv` is a single-column measured numeric signal vector. Occupancy is a descriptive summary. A whole-region repeat estimate is reported only with a `reliable` verdict: on 5 Mb of real MNase data the PSD peak was not a nucleosome repeat, and no ~185 bp peak was recoverable by detrended autocorrelation either (see docs/assays/mnase.md). Positioning lives only in `easyepi nucleosome-positioning`; the reserved module that used to reject execution was deleted rather than left as a promise. Uncertainty estimates remain development work.
 
 ## 14. RNA integration
 

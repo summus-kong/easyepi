@@ -47,7 +47,7 @@ ChromHMM command construction was checked against the [official manual](https://
 3. **Fragment quantification:** provide an established fragment-count backend; current BAM mode counts alignments, not paired fragments.
 4. **Motif background and networks:** implement validated GC/length/accessibility-matched background selection and reliable motif-hit-to-peak/TF network conversion. ULM itself does not supply chromVAR's bias correction.
 5. **Methylation:** add a maintained Python coverage-aware site/region model or an explicitly supported external mature tool. Current site tests do not detect DMRs or model sequencing coverage.
-6. **MNase:** `easyepi nucleosome` reports occupancy and a nucleosome-free fraction from a signal track, and `nucleosome-positioning` calls dyads from paired-end fragments. Neither reproduces NucleoATAC or MINCE, so positions are not interchangeable with those tools. `specific.mnase.positioning` stays unsupported on purpose.
+6. **MNase:** `easyepi nucleosome` reports occupancy and a nucleosome-free fraction from a signal track, and `nucleosome-positioning` calls dyads from paired-end fragments. Neither reproduces NucleoATAC or MINCE, so positions are not interchangeable with those tools. There is no reserved positioning module; the stub that used to reject execution was deleted once `nucleosome-positioning` existed.
 7. **Experimental designs:** support time trends, batches and repeated subjects through appropriate established models; do not treat a time course as arbitrary two-group tests.
 8. **Annotation:** improve GFF3/isoform support, blacklist handling, coordinate/build compatibility checks and scalable interval indexing. Methylation annotation currently expects gene-level GTF.
 9. **Scale:** replace dense per-base BigWig extraction/large all-pairs operations where justified; benchmark memory/runtime with 100k+ peaks and many samples.
@@ -57,7 +57,7 @@ ChromHMM command construction was checked against the [official manual](https://
 
 ## Legacy compatibility
 
-Low-level native peak and motif utilities remain importable because the user requested preservation of underlying functions. They are legacy exploratory helpers and are not recommended as confirmatory backends. Disabled metadata-only peak/nucleosome CLI commands raise errors instead of producing apparent successful analyses. `specific.mnase.positioning` intentionally remains unsupported.
+Low-level native peak and motif utilities remain importable because the user requested preservation of underlying functions. They are legacy exploratory helpers and are not recommended as confirmatory backends. Disabled metadata-only peak/nucleosome CLI commands raise errors instead of producing apparent successful analyses. `nucleosome-positioning` is the only positioning entry point.
 
 ## Filesystem cleanup
 

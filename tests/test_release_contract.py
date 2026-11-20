@@ -243,8 +243,17 @@ def test_deprecated_viz_heatmap_alias_still_works():
     assert any(issubclass(w.category, DeprecationWarning) for w in caught)
 
 
-def test_no_placeholder_positioning_results(tmp_path):
-    from easyepi.specific.mnase.positioning import main
-    with pytest.raises(SystemExit) as exc:
-        main([])
-    assert exc.value.code == 2
+def test_no_reserved_positioning_stub(tmp_path):
+    """The reserved stub must stay deleted.
+
+    It existed only to reject execution, and `nucleosome_positioning`
+    now provides the real caller. A resurrected stub would tell readers a
+    backend is pending and would hide the working command.
+    """
+    import importlib.util
+
+    spec = importlib.util.find_spec("easyepi.specific.mnase.positioning")
+    assert spec is None, (
+        "easyepi/specific/mnase/positioning.py is a do-nothing stub; "
+        "nucleosome-positioning is the supported entry point"
+    )

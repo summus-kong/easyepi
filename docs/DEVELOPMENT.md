@@ -126,7 +126,6 @@ Historical build, cache and output directories have been removed from the workin
 | `easyepi/specific/methylation/qc.py` | Independent assay input QC. |
 | `easyepi/specific/mnase/__init__.py` | Independent analysis scripts grouped by assay or shared scope. |
 | `easyepi/specific/mnase/nucleosome.py` | MNase signal summaries; no de novo positioning is inferred. |
-| `easyepi/specific/mnase/positioning.py` | Reserved entry for an established MNase nucleosome-positioning backend. |
 | `easyepi/specific/mnase/profile.py` | Assay-specific signal or methylation profile summaries. |
 | `easyepi/specific/mnase/qc.py` | MNase-seq QC。 |
 | `easyepi/universal/__init__.py` | Independent analysis scripts grouped by assay or shared scope. |
