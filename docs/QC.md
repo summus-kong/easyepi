@@ -138,6 +138,70 @@ value = 0.35
 Malformed entries (unknown `op`, non-numeric `value`) and unreadable files are
 skipped silently so one typo cannot break a batch.
 
+## Which reads are discarded
+
+Every metric below is computed after the same baseline filter, so a count that looks
+low is usually a filter rather than a data problem. Each stage reports what it
+skipped (`skipped`, `records_seen`, `used`) so the loss is visible instead of
+implied.
+
+### Baseline filter, applied everywhere
+
+| Test | Records dropped | Why |
+|---|---|---|
+| `is_unmapped` | yes | no position to contribute |
+| `is_secondary` | yes | one primary alignment per read; counting all placements would inflate coverage by repeat copy number |
+| `is_supplementary` | yes | chimeric segments are not independent observations |
+| `is_duplicate` | yes, when the BAM carries the flag | flagged duplicates are PCR copies. A BAM that was never duplicate-marked has the flag clear on every record and nothing is dropped; `library.duplicate_status` reports that case as `not_marked` rather than as zero duplicates |
+| `mapping_quality < --min-mapq` | yes | see the defaults below |
+
+`is_qcfail` is **not** tested. That is deliberate: the flag is set by aligner-specific
+conventions and is frequently absent, so filtering on it would silently behave
+differently across input files.
+
+### `--min-mapq` defaults, and why they differ
+
+| Command | Default | Note |
+|---|---|---|
+| `bam2bw` | 30 | |
+| `differential-peaks` | 30 | |
+| `nucleosome-positioning` | 30 | |
+| `dmr` | **10** | bisulfite aligners assign systematically lower MAPQ; 30 would discard a large share of valid calls |
+
+The `dmr` exception is pinned by `tests/test_min_mapq_invariants.py`: raising it to 30
+fails three assertions, including one that requires the help text to keep stating the
+reason.
+
+### Fragment-length window (`nucleosome-positioning` only)
+
+`--min-length 120` / `--max-length 200` select single-nucleosome fragments: 147 bp of
+protected DNA plus linker. A fragment below 120 bp is usually a sub-nucleosome or a
+dyad-less fragment and would place a false dyad; above 200 bp it is increasingly a
+di-nucleosome, whose midpoint is the linker between two nucleosomes rather than
+either dyad. Both bounds are flags because digestion strength varies by protocol.
+
+### One record per fragment
+
+Paired-end input is deduplicated to one observation per fragment: the read-1 record
+alone is kept. The fragment and cut-site paths both do this, so a paired library is
+not counted twice, and `library_complexity` (distinct templates over reads) remains
+comparable between single-end and paired-end input.
+
+### Blacklist
+
+`--blacklist BED` drops signal in the listed intervals and reports the fraction lost
+as `blacklist_fraction`. It is opt-in: no blacklist is assumed, because the ENCODE
+lists are genome-build specific and applying the wrong build removes real signal.
+
+### Where the two coverage paths are checked against each other
+
+`bam2bw` selects a path from the assay: cut sites for `--assay atac`
+(`coverage_readends`), accumulated fragment depth otherwise (`coverage_parallel`).
+The two disagreed on one filter until recently — the fragment path dropped flagged
+duplicates and the cut-site path did not — so a duplicate-marked BAM produced a
+different track depending only on which assay chose the path.
+`tests/test_coverage_path_parity.py` now fails if they drift apart again.
+
 ## Migrating away from `fail`
 
 If a downstream script gated on `verdict["failures"]`, it now never triggers.

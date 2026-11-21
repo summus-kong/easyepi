@@ -238,7 +238,8 @@ def bam_to_bigwig(
             for name in targets:
                 length = int(sizes[name])
                 values, _stats = read_end_bins(bam_path, name, length, bin_size,
-                                               min_mapq=min_mapq, shift="tn5")
+                                               min_mapq=min_mapq, shift="tn5",
+                                               skip_duplicates=True)
                 computed[name] = values * scale
         else:
             # One pool over EVERY chromosome-chunk: per-chromosome pools left the

@@ -51,7 +51,7 @@ zeros for the null features. Pinned by `tests/test_deseq2_adapter.py`.
 
 ## 2. ATAC/ChIP QC completeness
 
-**Status:** PARTIAL — the metrics exist; only the filtering-rule write-up is open
+**Status:** DONE (v0.6.0)
 **Module:** `easyepi/assay_metrics.py`, `easyepi/tss_enrichment.py` (new)
 
 | Sub-task | Status | Notes |
@@ -62,7 +62,7 @@ zeros for the null features. Pinned by `tests/test_deseq2_adapter.py`.
 | Mitochondrial fraction | DONE (v0.6.0) | `--mito-pattern`, never guessed; counted through the index over the whole file because chrM sorts last and a bounded scan missed it. Reports reads, mapped records and the denominator population; a non-matching pattern yields `null`, not 0.0 |
 | Library complexity (preseq-style estimate) | DONE (v0.6.0) | `library_complexity` = distinct templates / reads inspected, matched pairs counted once. Not a preseq extrapolation: it reports observed complexity and makes no claim about the unseen portion of the library |
 | Replicate concordance | DONE (v0.6.0) | `easyepi concordance`; `--peaks` gives correlation + Jaccard, `--matrix` correlation only. No threshold by design |
-| Documented filtering rules | TODO | thresholds must be in `QC.md`, not only in code |
+| Documented filtering rules | DONE (v0.6.0) | `QC.md` has "Which reads are discarded": the baseline filter, the `--min-mapq` defaults including why `dmr` uses 10, the fragment-length window, one-record-per-fragment, blacklist opt-in, and the fact that `is_qcfail` is deliberately not tested. Derived from the six reader loops, not from intent |
 
 ## 3. Fragment counting backend
 

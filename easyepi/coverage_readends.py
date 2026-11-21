@@ -42,12 +42,18 @@ def _require_pysam():
 def read_end_positions(bam_path: str | Path, chrom: str, start: int = 0,
                        end: int | None = None, *, min_mapq: int = 30,
                        shift: str = "tn5",
-                       one_per_fragment: bool = True) -> tuple[np.ndarray, dict[str, Any]]:
+                       one_per_fragment: bool = True,
+                       skip_duplicates: bool = True) -> tuple[np.ndarray, dict[str, Any]]:
     """5' positions of alignments on one chromosome, after the strand shift.
 
     Returns ``(positions, stats)`` where ``positions`` are 0-based offsets on
     ``chrom`` (clipped to ``[start, end)``). ``stats`` records how many records were
     seen, used, skipped and clipped, so a suspiciously low count is visible.
+
+    ``skip_duplicates`` exists so this path and ``coverage_parallel`` filter alike:
+    the fragment path has always dropped `is_duplicate` records, and without the
+    same test here a duplicate-marked BAM gave a different track depending only on
+    which assay selected the path.
     """
     pysam = _require_pysam()
     if shift not in ("none", "tn5"):
@@ -68,6 +74,9 @@ def read_end_positions(bam_path: str | Path, chrom: str, start: int = 0,
         for rec in bam.fetch(chrom, int(start), int(end)):
             seen += 1
             if rec.is_unmapped or rec.is_secondary or rec.is_supplementary:
+                skipped += 1
+                continue
+            if skip_duplicates and rec.is_duplicate:
                 skipped += 1
                 continue
             if rec.mapping_quality < min_mapq:
@@ -96,6 +105,7 @@ def read_end_positions(bam_path: str | Path, chrom: str, start: int = 0,
 def read_end_bins(bam_path: str | Path, chrom: str, length: int, bin_size: int,
                   *, min_mapq: int = 30, shift: str = "tn5",
                   one_per_fragment: bool = True,
+                  skip_duplicates: bool = True,
                   shift_span: int = 1) -> tuple[np.ndarray, dict[str, Any]]:
     """Bin the shifted 5' positions into a fixed bin grid for one chromosome.
 
@@ -109,7 +119,8 @@ def read_end_bins(bam_path: str | Path, chrom: str, length: int, bin_size: int,
     n_bins = max(1, int(np.ceil(length / bin_size)))
     positions, stats = read_end_positions(bam_path, chrom, 0, length,
                                           min_mapq=min_mapq, shift=shift,
-                                          one_per_fragment=one_per_fragment)
+                                          one_per_fragment=one_per_fragment,
+                                          skip_duplicates=skip_duplicates)
     if positions.size == 0:
         return np.zeros(n_bins), {**stats, "n_bins": n_bins, "bin_size": bin_size}
 
