@@ -42,12 +42,37 @@ Assay names are normalised, so `ChIP`, `chip`, `ChIP-seq`, `CUT&Tag`, `CUT&RUN`,
 | Signal | `frip`, `reads_in_peaks`, `signal_enrichment`, `mean_signal_in_peaks`, `tss_enrichment` |
 | Peak support | `peaks_with_zero_reads`, `fraction_peaks_zero`, `median_reads_per_peak`, `max_reads_per_peak`, `top_decile_read_share` |
 | Fragment structure | `median_fragment_length`, `fraction_nfr`, `fraction_mononucleosome`, `fraction_dinucleosome`, `mono_to_nfr_ratio` |
+| Library | `duplicate_fraction` (+`duplicate_status`, `duplicate_note`), `library_complexity`, `mitochondrial_fraction` (+`mitochondrial_reads`, `mitochondrial_denominator`, `mitochondrial_mapped_records`, `mitochondrial_status`, `mitochondrial_pattern`) |
 | Methylation | `mean_beta`, `is_bimodal` |
 | Contamination | `blacklist_fraction` |
 
 `mapping_rate_source` is `uninformative_no_unaligned_records` for BAMs that were
 already filtered upstream; the ratio is then trivially 1.0 and must not be read
 as an alignment success rate.
+
+The two library fractions can both be *undefined*, and each says so rather than
+reporting zero:
+
+- `duplicate_status` is `measured` only when some record carries the duplicate flag.
+  A BAM straight out of an aligner has it clear on every record, so a bare `0.0`
+  would claim a clean library that was never assessed; that case is reported as
+  `not_marked` with an explanatory `duplicate_note`. `library_complexity` (distinct
+  templates over reads inspected) is always defined and is the fallback signal.
+- `mitochondrial_fraction` requires `--mito-pattern`. Contig names differ between
+  references (`chrM`, `MT`, `chrMT`, accessions), so none is assumed; without the
+  flag the value is `null` with `mitochondrial_status: not_applicable`. When no
+  contig matches the pattern the status is `no_contig_matched`, again `null` — never
+  `0.0`, because a zero here reads as "free of mitochondrial reads" when the
+  question was never answered.
+
+`mitochondrial_fraction` is counted through the BAM index over the **whole file**,
+not from the scanned sample: chrM is the last contig of a coordinate-sorted BAM, so a
+scan bounded by `--max-reads` never reaches it. The reported triple is auditable —
+`mitochondrial_reads / mitochondrial_mapped_records`, with
+`mitochondrial_denominator: index_mapped_records` naming the population. That
+denominator counts every mapped record in the file, including secondary alignments,
+so it is not the same population as `library_complexity`'s scan; do not divide one by
+the other.
 
 ## Thresholds are advisory
 

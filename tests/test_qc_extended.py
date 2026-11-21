@@ -190,12 +190,19 @@ def test_read_flag_metrics_mito_and_duplicates(tmp_path):
     assert res["median_read_length"] == 75
 
 
-def test_read_flag_metrics_no_unmapped_is_still_valid(tmp_path):
+def test_read_flag_metrics_without_a_mito_contig_reports_undefined(tmp_path):
+    """No matching contig is `None`, not 0.0.
+
+    This fixture has only `chr1`. Reporting 0.0 here would claim the library is free
+    of mitochondrial reads when the question was never answered -- the failure mode
+    this metric exists to avoid. The status carries the reason instead.
+    """
     bam = tmp_path / "reads.bam"
     _write_bam(bam, [(1000, 150, 0, 0)])
     res = read_flag_metrics(str(bam))
     assert res["reads_inspected"] == 1
-    assert res["mitochondrial_fraction"] == 0.0
+    assert res["mitochondrial_fraction"] is None
+    assert res["mitochondrial_status"] == "no_contig_matched"
 
 
 def test_tss_enrichment_detects_signal(tmp_path):

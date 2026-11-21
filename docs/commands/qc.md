@@ -13,6 +13,7 @@ easyepi qc --assay atac --bam sample.bam --out qc.json
 | `--peak` | optional |  | BED/narrowPeak(s); repeatable and/or comma-separated. Enables FRiP and peak metrics |
 | `--input-dir` | optional |  | folder scanned for *.bam / *.bw / *.bigWig and peak files; each sample becomes <stem>. Saves listing every file by hand |
 | `--out` | required |  | path of the JSON report to write; the parent directory must already exist |
+| `--mito-pattern` | optional |  | regular expression matching mitochondrial contig names, e.g. '^(chr)?M(T)?$'. Required for mitochondrial_fraction: the contig is spelled chrM, MT, chrMT or an accession depending on the reference, and no single spelling is assumed |
 | `--tss` | optional |  | TSV of transcription start sites (chrom, tss[, strand]) for TSS enrichment; requires --bam and an ATAC assay |
 | `--tss-flank` | optional | `2000` | half-width of the TSS window in bp (default 2000) |
 | `--no-html` | optional |  | do not write the self-contained HTML report beside the JSON |

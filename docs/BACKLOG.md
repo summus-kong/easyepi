@@ -51,16 +51,16 @@ zeros for the null features. Pinned by `tests/test_deseq2_adapter.py`.
 
 ## 2. ATAC/ChIP QC completeness
 
-**Status:** TODO
+**Status:** PARTIAL — the metrics exist; only the filtering-rule write-up is open
 **Module:** `easyepi/assay_metrics.py`, `easyepi/tss_enrichment.py` (new)
 
 | Sub-task | Status | Notes |
 | --- | --- | --- |
 | TSS enrichment score | DONE (v0.6.0) | `easyepi/tss_enrichment.py`; `qc --tss` accepts a GTF directly. Four states, so a zero-background library reads as measured-and-failed rather than never measured |
 | Fragment-length distribution | DONE (v0.6.0) | `assay_metrics.fragment_length_summary`; proper pairs only, each template counted once, nucleosome-free / mono / di nucleosome fractions reported. Single-end input returns `not_applicable` rather than a fabricated length |
-| Duplicate fraction | TODO | pysam `get_duplicate_flag`; distinct from library complexity |
-| Mitochondrial fraction | TODO | needs a chrom-name pattern; make it a flag, not a guess |
-| Library complexity (preseq-style estimate) | TODO | at minimum: distinct fragments / total fragments |
+| Duplicate fraction | DONE (v0.6.0) | `assay_metrics.library_summary`; `get_duplicate_flag` when present, and `duplicate_status` says `not_marked` rather than printing a 0.0 that would claim a clean unmarked library |
+| Mitochondrial fraction | DONE (v0.6.0) | `--mito-pattern`, never guessed; counted through the index over the whole file because chrM sorts last and a bounded scan missed it. Reports reads, mapped records and the denominator population; a non-matching pattern yields `null`, not 0.0 |
+| Library complexity (preseq-style estimate) | DONE (v0.6.0) | `library_complexity` = distinct templates / reads inspected, matched pairs counted once. Not a preseq extrapolation: it reports observed complexity and makes no claim about the unseen portion of the library |
 | Replicate concordance | DONE (v0.6.0) | `easyepi concordance`; `--peaks` gives correlation + Jaccard, `--matrix` correlation only. No threshold by design |
 | Documented filtering rules | TODO | thresholds must be in `QC.md`, not only in code |
 

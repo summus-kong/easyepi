@@ -26,6 +26,45 @@ def _ratio(num, den):
 # ---------------------------------------------------------------------------
 # Read-level flags: duplication, MAPQ, mitochondrial fraction, read length
 # ---------------------------------------------------------------------------
+def _mito_from_index(bam_path: str, mito_prefixes: tuple[str, ...]
+                     ) -> tuple[int | None, float | None, str, int | None]:
+    """``(reads, fraction, status, denominator)`` for mitochondrial contigs.
+
+    The denominator is returned so the caller can report the two numbers the fraction
+    was computed from. Without it the ratio cannot be checked, and an earlier version
+    of this module silently divided a whole-file numerator by a truncated scan total.
+
+    Returns ``(None, None, reason, None)`` when the count cannot be made, so the caller
+    reports "undefined" rather than "zero". A zero mitochondrial fraction is the
+    most dangerous wrong answer this module can give: it says a contaminated library
+    is clean, and nothing downstream can tell.
+
+    Counting through the index rather than the record scan is required, not an
+    optimisation: chrM is the last contig of a coordinate-sorted BAM, so a scan that
+    stops at ``max_reads`` never sees it.
+    """
+    import pysam
+
+    try:
+        with pysam.AlignmentFile(bam_path, "rb") as bam:
+            names = [bam.get_reference_name(i) for i in range(bam.nreferences)]
+            # Exact names only. The caller resolves a --mito-pattern to contig
+            # names; a startswith() test here would re-introduce the chrM
+            # assumption and let an empty selection match anyway.
+            hit = [n for n in names if n in mito_prefixes]
+            if not hit:
+                return None, None, "no_contig_matched", None
+            reads = sum(int(bam.count(n)) for n in hit)
+            denom = int(bam.mapped)
+            if not denom:
+                return reads, None, "no_mapped_reads", None
+            return reads, reads / denom, "measured", denom
+    except Exception:
+        # Unindexed or unreadable: a scan would under-report by construction, so
+        # report the failure instead of a number that looks measured.
+        return None, None, "count_failed", None
+
+
 def read_flag_metrics(bam_path: str, max_reads: int = 500_000,
                       mito_prefixes: tuple[str, ...] = ("chrM", "MT", "chrMT", "M")) -> dict[str, Any]:
     """Duplication rate, MAPQ distribution, mitochondrial fraction, read length.
@@ -54,9 +93,10 @@ def read_flag_metrics(bam_path: str, max_reads: int = 500_000,
                 total += 1
                 if rec.is_duplicate:
                     flagged_dup += 1
-                ref = rec.reference_name or ""
-                if ref in mito_prefixes or ref.startswith("chrM"):
-                    mito += 1
+                # Mitochondrial reads are counted below, through the index.
+                # chrM is the last contig in a coordinate-sorted BAM, so this scan
+                # -- which stops at max_reads -- never reaches it and every file
+                # would report 0.0.
                 key = (rec.reference_id, rec.reference_start, rec.is_reverse,
                        rec.next_reference_id, rec.next_reference_start)
                 if key in seen:
@@ -89,15 +129,32 @@ def read_flag_metrics(bam_path: str, max_reads: int = 500_000,
                               else (lengths[n // 2 - 1] + lengths[n // 2]) / 2)
     dup_source = "duplicate_flag" if flagged_dup else "positional_estimate"
     dup_count = flagged_dup if flagged_dup else positional_dup
-    return {
+
+    # Mitochondrial fraction from the index, not from the scan above.
+    mito_reads, mito_fraction, mito_status, mito_denom = _mito_from_index(
+        bam_path, mito_prefixes)
+    out = {
         "reads_inspected": total,
         "duplicate_rate": _ratio(dup_count, total),
         "duplicate_source": dup_source,
-        "mitochondrial_reads": mito,
-        "mitochondrial_fraction": _ratio(mito, total),
         "median_read_length": median_read_length,
         **{k: _ratio(v, total) for k, v in mapq_bins.items()},
     }
+    if mito_fraction is None:
+        # No contig matched: undefined, not zero. A zero here would claim a clean
+        # library that was never assessed.
+        out["mitochondrial_reads"] = None
+        out["mitochondrial_fraction"] = None
+        out["mitochondrial_status"] = mito_status
+    else:
+        out["mitochondrial_reads"] = mito_reads
+        out["mitochondrial_fraction"] = mito_fraction
+        out["mitochondrial_denominator"] = "index_mapped_records"
+        # The value, not just its name: without it the fraction cannot be checked
+        # against the counts it was computed from.
+        out["mitochondrial_mapped_records"] = mito_denom  # the count, not a label
+        out["mitochondrial_status"] = "measured"
+    return out
 
 
 # ---------------------------------------------------------------------------

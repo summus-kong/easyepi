@@ -554,6 +554,127 @@ def nucleosome_repeat_length(length_sample: Sequence[float],
     }
 
 
+def _contig_names(bam_path: str) -> list[str]:
+    """Reference names from the BAM header, or [] when the file cannot be read."""
+    import pysam
+
+    try:
+        with pysam.AlignmentFile(bam_path, "rb") as bam:
+            return [bam.get_reference_name(i) for i in range(bam.nreferences)]
+    except Exception:
+        return []
+
+
+def library_summary(bam_path: str, max_reads: int | None = 500_000,
+                    mito_pattern: str | None = None) -> dict[str, Any]:
+    """Duplicate fraction, mitochondrial fraction and distinct-fragment ratio.
+
+    One pass, because all three are per-record counts and a second pass over the
+    same BAM costs as much as the first.
+
+    ``mito_pattern`` is a regular expression matched against contig names, e.g.
+    ``r"^(chr)?M(T)?$"``. It is required for the mitochondrial fraction: the
+    contig is spelled ``chrM``, ``MT``, ``chrMT`` or an accession depending on the
+    reference, and assuming one spelling reports a clean library on a file that is
+    30% mitochondrial. With no pattern the metric is ``not_applicable``.
+    """
+    import pysam
+
+    total = 0
+    flagged_dup = 0
+    # Template identity for the complexity ratio. Two mates of one proper pair
+    # share a name, so the name alone de-duplicates; single-end reads use it too.
+    seen_templates: set[str] = set()
+    mito_re = None
+    if mito_pattern:
+        import re
+
+        try:
+            mito_re = re.compile(mito_pattern)
+        except re.error as exc:
+            return {"error": f"mito_pattern is not a valid regex: {exc}"}
+
+    try:
+        with pysam.AlignmentFile(bam_path, "rb") as bam:
+            for rec in bam.fetch(until_eof=True):
+                if rec.is_unmapped or rec.is_secondary or rec.is_supplementary:
+                    continue
+                total += 1
+                if rec.is_duplicate:
+                    flagged_dup += 1
+                # Mitochondrial reads are NOT counted here: chrM sorts last in a
+                # coordinate-sorted BAM, so this scan never sees it. See the
+                # index-based count below.
+                # A pair contributes one template; without this the ratio doubles
+                # for paired-end and the metric is not comparable across layouts.
+                if not (rec.is_paired and not rec.is_read1):
+                    seen_templates.add(rec.query_name)
+                # `None` means "no cap": the whole file, which is what a caller
+                # asking for exact duplicate and mitochondrial fractions wants.
+                if max_reads is not None and total >= max_reads:
+                    break
+    except Exception as exc:  # unreadable BAM -> report why, do not crash
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+    if not total:
+        return {"n_reads": 0, "status": "no_reads"}
+
+    out: dict[str, Any] = {
+        "n_reads": total,
+        "n_templates": len(seen_templates),
+    }
+
+    # Duplicate fraction. A BAM with no duplicate-marking step has the flag clear on
+    # every record, and reporting that as fraction 0.0 claims a clean library that
+    # was never assessed, so the zero case is called out by status.
+    if flagged_dup:
+        out["duplicate_fraction"] = flagged_dup / total
+        out["n_duplicates"] = flagged_dup
+        out["duplicate_status"] = "measured"
+    else:
+        out["duplicate_fraction"] = 0.0
+        out["n_duplicates"] = 0
+        out["duplicate_status"] = "not_marked"
+        out["duplicate_note"] = (
+            "no record carried the duplicate flag; either the library has none or "
+            "the BAM was never duplicate-marked (e.g. no Picard MarkDuplicates or "
+            "samtools markdup step), and the two are not distinguishable from this "
+            "file")
+
+    if mito_re is None:
+        out["mitochondrial_fraction"] = None
+        out["mitochondrial_status"] = "not_applicable"
+        out["mitochondrial_note"] = (
+            "no --mito-pattern was given; mitochondrial contig names differ between "
+            "references (chrM, MT, chrMT, accessions), so none is assumed")
+    else:
+        # Delegate to read_flag_metrics rather than query the index again. That
+        # function is the package's one mitochondrial counter; when it and this
+        # block each computed the number, one of them was wrong and both appeared
+        # in the same JSON. It returns None for the fraction when no contig matches
+        # or the count fails, and the status below carries the reason.
+        from .qc_extended import read_flag_metrics
+
+        # No filler: an empty match must stay empty so the status reads
+        # `no_contig_matched`, not a measured zero.
+        resolved = tuple(n for n in _contig_names(bam_path) if mito_re.match(n))
+        flags = read_flag_metrics(bam_path, max_reads=total,
+                                  mito_prefixes=resolved)
+        out["mitochondrial_fraction"] = flags.get("mitochondrial_fraction")
+        out["mitochondrial_reads"] = flags.get("mitochondrial_reads")
+        out["mitochondrial_status"] = flags.get("mitochondrial_status")
+        if "mitochondrial_denominator" in flags:
+            out["mitochondrial_denominator"] = flags["mitochondrial_denominator"]
+        if "mitochondrial_mapped_records" in flags:
+            out["mitochondrial_mapped_records"] = flags["mitochondrial_mapped_records"]
+        out["mitochondrial_pattern"] = mito_pattern
+
+    # Distinct templates over observed reads. 1.0 means every template was seen
+    # once; lower means sequencing sampled the same fragments repeatedly.
+    out["library_complexity"] = len(seen_templates) / total
+    return out
+
+
 def beta_distribution(table: Iterable[float]) -> dict[str, Any]:
     """Summarise a methylation beta-value vector (0-1 scale)."""
     import numpy as np
@@ -581,10 +702,10 @@ ASSAY_METRIC_BUILDERS: dict[str, tuple[str, ...]] = {
     # ATAC QC gains tss_enrichment: the signal-to-background ratio at transcription
     # start sites, which is how an ATAC library is judged before any peak is
     # called. It needs a TSS table, so it is opt-in via tss_rows.
-    "atac-qc": ("fragments", "frip", "enrichment", "tss_enrichment"),
-    "chip-qc": ("frip", "enrichment"),
-    "histone-qc": ("frip", "enrichment"),
-    "mnase-qc": ("periodicity", "fragments"),
+    "atac-qc": ("fragments", "frip", "enrichment", "tss_enrichment", "library"),
+    "chip-qc": ("frip", "enrichment", "library"),
+    "histone-qc": ("frip", "enrichment", "library"),
+    "mnase-qc": ("periodicity", "fragments", "library"),
     "methylation-qc": ("beta",),
 }
 
@@ -609,7 +730,8 @@ def compute_assay_metrics(assay: str, *, bam: str | None = None, bigwig: str | N
                           peak: str | None = None, methylation_values: Iterable[float] | None = None,
                           max_reads: int = 200_000,
                           tss_rows: Sequence[tuple[str, int, str]] | None = None,
-                          tss_flank: int = 2000) -> dict[str, Any]:
+                          tss_flank: int = 2000,
+                          mito_pattern: str | None = None) -> dict[str, Any]:
     """Compute the metric set that is meaningful for ``assay``.
 
     Returns a flat dict so it can be merged directly into the QC row.
@@ -678,6 +800,20 @@ def compute_assay_metrics(assay: str, *, bam: str | None = None, bigwig: str | N
             if tss_res.get("tss_enrichment_status") in ("background_zero",
                                                          "no_signal"):
                 out["tss_enrichment"] = 0.0
+    if "library" in wanted and bam:
+        lib = library_summary(bam, max_reads=max_reads, mito_pattern=mito_pattern)
+        out["library"] = lib
+        if "duplicate_fraction" in lib:
+            out["duplicate_fraction"] = lib["duplicate_fraction"]
+            out["duplicate_status"] = lib["duplicate_status"]
+        if lib.get("mitochondrial_fraction") is not None:
+            out["mitochondrial_fraction"] = lib["mitochondrial_fraction"]
+        else:
+            # Carry the absence through, so a verdict can tell "no mitochondria"
+            # from "the contig was never identified".
+            out["mitochondrial_status"] = lib.get("mitochondrial_status")
+        if "library_complexity" in lib:
+            out["library_complexity"] = lib["library_complexity"]
     if "beta" in wanted and methylation_values is not None:
         b = beta_distribution(methylation_values)
         out["beta_detail"] = b

@@ -2,6 +2,27 @@
 
 ## 0.6.0 - unreleased
 
+### Added
+
+- **Library metrics: duplication, complexity, mitochondrial content.**
+  `assay_metrics.library_summary` reports `duplicate_fraction` with a
+  `duplicate_status` that distinguishes a measured zero from a BAM that was never
+  duplicate-marked, `library_complexity` (distinct templates over reads inspected),
+  and `mitochondrial_fraction` gated on a new `--mito-pattern`. Registered as the
+  `library` group for `atac-qc`, `chip-qc`, `histone-qc` and `mnase-qc`.
+  The mitochondrial count is taken through the BAM index over the whole file: a
+  scan bounded by `--max-reads` stops long before chrM, which is the last contig of
+  a coordinate-sorted BAM, and the earlier scan-based version therefore reported
+  `0.0` for a contaminated library. `mitochondrial_reads`,
+  `mitochondrial_mapped_records` and `mitochondrial_denominator` are all reported so
+  the fraction can be checked against the numbers it came from.
+- **`--mito-pattern` and `--tss`/`--tss-flank` reach every QC entry point.**
+  The five assay aliases build their own argument parser, so a flag registered only
+  on `qc` was silently absent there and the caller's `getattr(..., None)` turned the
+  absence into a default instead of an error. Both flag groups now come from shared
+  helpers used by all six entry points, and
+  `tests/test_qc_entry_point_parity.py` fails if they drift apart again.
+
 ### Changed
 
 - **Coverage metadata names the counting unit.** `bam2bw` now writes a

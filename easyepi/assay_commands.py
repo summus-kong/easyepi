@@ -133,6 +133,7 @@ def run_assay_qc(args: Any, assay: str) -> int:
                 blacklist=_blacklist,
                 bam_qc=row.get("bam_qc"),
                 max_reads=getattr(args, "max_reads", 200000),
+                mito_pattern=getattr(args, "mito_pattern", None),
                 rules=_rules,
             )
             if _built["assay_qc"]:

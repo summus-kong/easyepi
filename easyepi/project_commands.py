@@ -126,6 +126,7 @@ def make_qc_report_command(args: Any) -> int:
                 blacklist=getattr(args, "blacklist", None) or getattr(config, "blacklist", None),
                 bam_qc=metrics.get("bam"),
                 max_reads=getattr(args, "max_reads", 200_000),
+                mito_pattern=getattr(args, "mito_pattern", None),
                 rules=_rules,
             )
             if _built["assay_qc"]:

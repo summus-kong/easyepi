@@ -329,6 +329,37 @@ def _cmd_assay_qc(args):
     return run_assay_qc(args, args.assay_name)
 
 
+def _add_tss_args(parser) -> None:
+    """Register the TSS options on a QC parser.
+
+    Included for the same reason as ``--mito-pattern``: the five assay aliases build
+    their own parser, so a flag added to ``qc`` alone is absent there and the caller's
+    ``getattr(..., None)`` hides it.
+    """
+    parser.add_argument(
+        "--tss", default=None,
+        help="TSV of transcription start sites (chrom, tss[, strand]) for TSS "
+             "enrichment; requires --bam and an ATAC assay")
+    parser.add_argument(
+        "--tss-flank", type=int, default=2000,
+        help="half-width of the TSS window in bp (default 2000)")
+
+
+def _add_mito_pattern_arg(parser) -> None:
+    """Register ``--mito-pattern`` on a QC parser.
+
+    Shared by ``qc`` and the five assay aliases: the aliases build their own parser,
+    so adding the flag in one place only is how it came to be missing on the alias
+    path while `getattr(args, "mito_pattern", None)` made it look merely unset.
+    """
+    parser.add_argument(
+        "--mito-pattern", default=None,
+        help="regular expression matching mitochondrial contig names, e.g. "
+             "'^(chr)?M(T)?$'. Required for mitochondrial_fraction: the contig is "
+             "spelled chrM, MT, chrMT or an accession depending on the reference, "
+             "and no single spelling is assumed")
+
+
 def _add_runtime_args(parser):
     """Add shared project, logging and reproducibility parameters."""
     parser.add_argument("--project", default=None, help="Project TOML or TSV sample manifest")
@@ -480,11 +511,8 @@ def build_parser() -> argparse.ArgumentParser:
     # reference than the other metrics. A gene-level table and a transcript-level
     # table give materially different scores, so the caller supplies the file
     # rather than having one guessed from a GTF.
-    p_qc.add_argument("--tss", default=None,
-                      help="TSV of transcription start sites (chrom, tss[, strand]) "
-                           "for TSS enrichment; requires --bam and an ATAC assay")
-    p_qc.add_argument("--tss-flank", type=int, default=2000,
-                      help="half-width of the TSS window in bp (default 2000)")
+    _add_mito_pattern_arg(p_qc)
+    _add_tss_args(p_qc)
     p_qc.add_argument("--no-html", action="store_true", dest="no_html",
                       help="do not write the self-contained HTML report beside "
                            "the JSON")
@@ -1000,6 +1028,8 @@ def build_parser() -> argparse.ArgumentParser:
         p_assay.add_argument(
             "--max-reads", type=int, default=200000,
             help="cap on reads inspected for FRiP/fragment metrics (default: 200000)")
+        _add_tss_args(p_assay)
+        _add_mito_pattern_arg(p_assay)
         # _add_runtime_args already defines --assay; the alias only fixes its
         # default so the user cannot accidentally run atac-qc with chip thresholds.
         for action in p_assay._actions:
