@@ -194,6 +194,7 @@ def run_diff(args) -> int:
         raise ValueError("--design is required; groups are never inferred from column order")
     mask_a, design, levels = read_design(design_path, sample_ids)
     method = getattr(args, "method", "mannwhitney")
+    pair_requested = getattr(args, "pair", None)
     if method == "wilcoxon":
         pair_key = getattr(args, "pair", None)
         if not pair_key:
@@ -209,6 +210,16 @@ def run_diff(args) -> int:
         ordered = a_ids + [b_by_pair[pair] for pair in a_pairs]
         mat = mat[:, [sample_ids.index(sid) for sid in ordered]]
         mask_a = np.array([True] * len(a_ids) + [False] * len(a_ids))
+    # `--pair` is only read by the wilcoxon branch above. Accepting it for any
+    # other method would hand back an unpaired p-value that the caller has every
+    # reason to read as paired, so refuse instead of dropping it.
+    if pair_requested and method != "wilcoxon":
+        raise ValueError(
+            "--pair only applies to --method wilcoxon; '%s' compares groups "
+            "without pairing, so the pairing column would be dropped without "
+            "changing any number. Use --method wilcoxon, or remove --pair to "
+            "accept an unpaired result knowingly." % method
+        )
     # `--design-factors` is only honoured by the deseq2 adapter. Accepting it
     # elsewhere and dropping it silently would hand back an unadjusted p-value
     # that looks adjusted, so say so instead.
