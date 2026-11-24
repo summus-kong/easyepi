@@ -30,5 +30,11 @@ AGENTS.md
 
 # Exploratory pilot studies. They carry their own README and conclusions but sit
 # outside the package, are not exercised by the test suite, and reference data
-# that only exists on one machine. Keep them local; see docs/BACKLOG.md.
+# that only exists on one machine. Keep them local.
 pilot_*/
+
+# Internal planning documents. They record unfinished work, rejected approaches
+# and guesses about what to build next; publishing them would present a list of
+# open questions as if it were a description of the released tool. The code and
+# the user-facing docs are the published contract.
+docs/BACKLOG.md

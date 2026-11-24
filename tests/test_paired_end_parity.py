@@ -97,7 +97,7 @@ def test_counts_report_one_fragment_per_template(tmp_path):
 
     A proper pair is one fragment; counting both mates would make this
     `2 * len(FRAGMENTS)` and the metadata would then describe a track that
-    double counts -- the failure mode BACKLOG item 3 exists to prevent.
+    double counts -- the failure mode the `counting` block exists to prevent.
     """
     _values, counts = _coverage_and_counts(_write(tmp_path, True), "none")
     assert counts["fragment"] == len(FRAGMENTS)

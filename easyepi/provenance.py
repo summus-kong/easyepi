@@ -1,8 +1,9 @@
 """Record what went into a run so a later step can check it still does.
 
-BACKLOG item 10 asked for four things that were missing: input hashes,
-output hashes, direct dependency versions and external tool versions.
-The design constraints here come from how the runs are actually used:
+Four things matter for reproducibility and none of them were recorded:
+input hashes, output hashes, dependency versions and external tool
+versions. The design constraints here come from how the runs are
+actually used:
 
   * A BAM can be tens of gigabytes. Hashing it is minutes of IO, so the
     caller decides whether to pay for it (`digest_files`), unlike the
