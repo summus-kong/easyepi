@@ -2,6 +2,18 @@
 
 ## 0.6.0 - unreleased
 
+### Added (reproducibility)
+
+- `easyepi/provenance.py`: input and output SHA-256, direct dependency
+  versions and external tool versions, written into `status.json` under
+  `provenance`. Tools resolve through `PATH` and then through explicit
+  `search_paths`, so a conda env that the run does not activate still yields a
+  version instead of a false `not_found`. Output hashing is opt-in
+  (`RunRecorder.hash_outputs()`) because it costs real IO on a large BAM.
+- A missing input, an absent tool and an unreadable path each record a reason
+  (`not_found`, `skipped_too_large`, `not_a_file`, `unreadable`) instead of
+  raising, so a manifest can be written after the fact.
+
 ### Added
 
 - **Library metrics: duplication, complexity, mitochondrial content.**

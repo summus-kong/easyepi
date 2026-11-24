@@ -156,17 +156,31 @@ anti-conservative at high coverage and unstable at low coverage.
 
 ## 10. Reproducibility
 
-**Status:** TODO
-**Module:** `easyepi/provenance.py` (new)
+**Status:** PARTIAL (v0.6.0) — every field is recorded; the lock export is
+environment-specific and stays out of the package
+**Module:** `easyepi/provenance.py`, written into `status.json` under
+`provenance` by `RunRecorder.finish()`
 
 | Sub-task | Status | Notes |
 | --- | --- | --- |
-| SHA-256 of every input file | TODO | recorded in the run manifest |
-| Output file hashes | TODO | lets a downstream step verify inputs |
-| Direct dependency versions | TODO | package versions, not just Python |
-| External tool versions | TODO | `macs3 --version`, `bedtools --version`, etc. |
+| SHA-256 of every input file | DONE | `provenance.digest_files()`; streams in 1 MiB
+blocks so a 2.6 GB BAM does not have to fit in memory |
+| Output file hashes | DONE | opt-in via `RunRecorder.hash_outputs()`; hashing every
+output by default would double the wall time of a run that nobody asked to verify |
+| Direct dependency versions | DONE | `provenance.package_versions()`; the list lives in
+one place instead of being spelled out at the call site |
+| External tool versions | DONE | `provenance.external_tools()`; resolved through `PATH`
+then through explicit `search_paths`, because a conda env bin directory is not on `PATH` |
 | Command-line provenance | DONE | argv already recorded |
-| Environment lock file | TODO | export from micromamba |
+| Environment lock file | TODO | out of scope: `micromamba env export` is
+environment-specific and cannot be produced by this package |
+
+A missing file, an absent tool and an unreadable path each produce a recorded
+reason (`not_found`, `skipped_too_large`, `not_a_file`, `unreadable`) rather than
+an exception, because a manifest written after the fact is more useful than a
+run that fails while writing it. `describe_gaps()` turns those into sentences the
+recorder logs, so a manifest that established nothing does not look like one that
+had nothing to establish.
 
 ## 11. Assay-specific diagnostics
 
