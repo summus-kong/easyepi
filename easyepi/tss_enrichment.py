@@ -150,6 +150,30 @@ def _scan_region(bam, chrom: str, lo: int, hi: int):
             yield rec
 
 
+def _resolve_contig(name: str, present: "set[str] | dict[str, object]") -> "str | None":
+    """Map an annotation contig name onto one the BAM actually uses.
+
+    Tries the name itself, then the `chr`-prefixed and `chr`-stripped forms,
+    plus the mitochondrial spellings, because a UCSC BAM against an Ensembl
+    annotation (or the reverse) is a routine combination. Returns ``None`` when
+    no spelling is present, so the caller can report it rather than count a
+    silent zero.
+    """
+    if name in present:
+        return name
+    candidates = []
+    if name.startswith("chr"):
+        candidates.append(name[3:])
+    else:
+        candidates.append("chr" + name)
+    if name in ("M", "MT", "chrM", "chrMT"):
+        candidates.extend(["chrM", "MT", "M", "chrMT"])
+    for cand in candidates:
+        if cand in present:
+            return cand
+    return None
+
+
 def tss_enrichment(
     bam_path: str,
     tss_rows: Sequence[Tuple[str, int, str]],
@@ -202,16 +226,42 @@ def tss_enrichment(
 
     used_reads = 0
     skipped_chrom = 0
+    # Defined before the BAM is opened: an unreadable file raises here, and the
+    # handler below reports the fault by name. Leaving these inside the `with`
+    # block made that handler raise UnboundLocalError instead, turning a
+    # per-sample data fault into a crashed run.
+    renamed: Dict[str, str] = {}
+    unresolved: List[str] = []
     try:
         with pysam.AlignmentFile(bam_path, "rb") as bam:
             present = set(bam.references)
             # A TSS on a contig the BAM does not have is not an error, but it must not
-            # contribute a silent zero to the profile either.
-            by_chrom = {c: v for c, v in by_chrom.items() if c in present}
+            # contribute a silent zero to the profile either. Names are resolved
+            # first: an Ensembl annotation against a UCSC BAM is routine, and
+            # treating it as an absent contig made the failure look like a broken
+            # alignment.
+            resolved: Dict[str, np.ndarray] = {}
+            for name, positions in by_chrom.items():
+                target = _resolve_contig(name, present)
+                if target is None:
+                    unresolved.append(name)
+                    continue
+                if target != name:
+                    renamed[name] = target
+                if target in resolved:
+                    resolved[target] = np.sort(
+                        np.concatenate([resolved[target], positions]))
+                else:
+                    resolved[target] = positions
+            by_chrom = resolved
             if not by_chrom:
                 return {"tss_enrichment_score": None,
                         "tss_enrichment_status": "no_tss",
-                        "error": "no TSS chromosome is present in the BAM",
+                        "error": ("no TSS chromosome is present in the BAM"
+                                  + (" (%d name(s) could not be matched, e.g. %s)"
+                                     % (len(unresolved), unresolved[0])
+                                     if unresolved else "")),
+                        "chromosomes_unmatched": sorted(unresolved),
                         "reads_truncated": False,
                         "max_reads": max_reads}
             tss_count = int(sum(len(v) for v in by_chrom.values()))
@@ -266,6 +316,7 @@ def tss_enrichment(
         return {"tss_enrichment_score": None,
                 "tss_enrichment_status": "error",
                 "error": f"{type(exc).__name__}: {exc}",
+                "chromosomes_renamed": renamed,
                 "tss_count": tss_count,
                 "reads_used": used_reads,
                 "reads_truncated": used_reads >= max_reads,
@@ -281,6 +332,7 @@ def tss_enrichment(
         return {"tss_enrichment_score": None,
                 "tss_enrichment_status": "no_reads",
                 "error": "no usable reads near any TSS",
+                "chromosomes_renamed": renamed,
                 "tss_count": tss_count,
                 "reads_used": 0,
                 "reads_truncated": False,
@@ -309,6 +361,7 @@ def tss_enrichment(
         return {
             "tss_enrichment_score": None,
             "tss_enrichment_status": status,
+            "chromosomes_renamed": renamed,
             "error": ("no pileup at the TSS either; the library has no TSS signal"
                       if status == "no_signal"
                       else "flanking pileup is zero, so the ratio is undefined; this "
@@ -324,6 +377,7 @@ def tss_enrichment(
 
     return {
         "tss_enrichment_score": signal / background,
+        "chromosomes_renamed": renamed,
         "tss_enrichment_status": "measured",
         "signal": signal,
         "background": background,
