@@ -13,22 +13,11 @@ works so the skip cannot hide a broken reconciler.
 
 from __future__ import annotations
 
-import shutil
-import subprocess
-
 import pytest
 
 pysam = pytest.importorskip("pysam")
 
 from easyepi.tss_enrichment import tss_enrichment  # noqa: E402
-
-SAMTOOLS = shutil.which("samtools") or (
-    "/data1/GaoLab/houoweibo/soft/micromamba/root/envs/dna/bin/samtools"
-)
-needs_samtools = pytest.mark.skipif(
-    not shutil.which(SAMTOOLS) and not __import__("os").path.exists(SAMTOOLS),
-    reason="samtools is needed to sort and index the fixture BAM",
-)
 
 TSS = (20000, 60000, 100000, 140000)
 
@@ -62,10 +51,8 @@ def _build(path, contig="chr1"):
                 a.cigarstring = "50M"
                 a.query_qualities = pysam.qualitystring_to_array("I" * 50)
                 out.write(a)
-    subprocess.run([SAMTOOLS, "sort", "-o", str(path), str(path)], check=True,
-                   capture_output=True)
-    subprocess.run([SAMTOOLS, "index", str(path)], check=True,
-                   capture_output=True)
+    pysam.sort("-o", str(path), str(path))
+    pysam.index(str(path))
 
 
 @pytest.fixture()
@@ -75,7 +62,6 @@ def bam(tmp_path):
     return str(path)
 
 
-@needs_samtools
 def test_ensembl_names_give_the_same_score_as_ucsc_names(bam):
     ucsc = [("chr1", t, "+") for t in TSS]
     ens = [("1", t, "+") for t in TSS]
@@ -90,7 +76,6 @@ def test_ensembl_names_give_the_same_score_as_ucsc_names(bam):
     assert b["tss_enrichment_score"] == a["tss_enrichment_score"]
 
 
-@needs_samtools
 def test_the_rename_is_reported_not_silent(bam):
     ucsc = [("chr1", t, "+") for t in TSS]
     ens = [("1", t, "+") for t in TSS]
@@ -99,7 +84,6 @@ def test_the_rename_is_reported_not_silent(bam):
     assert tss_enrichment(bam, ens)["chromosomes_renamed"] == {"1": "chr1"}
 
 
-@needs_samtools
 def test_a_truly_absent_contig_is_still_reported(bam):
     other = [("chrZ", t, "+") for t in TSS]
 
@@ -110,7 +94,6 @@ def test_a_truly_absent_contig_is_still_reported(bam):
     assert res["chromosomes_unmatched"] == ["chrZ"]
 
 
-@needs_samtools
 def test_mitochondrial_contigs_stay_excluded(bam):
     """Mitochondrial contigs are dropped on purpose, not reconciled.
 
@@ -123,7 +106,6 @@ def test_mitochondrial_contigs_stay_excluded(bam):
         assert res["tss_enrichment_status"] == "no_tss", spelling
 
 
-@needs_samtools
 def test_a_plain_rename_still_works_alongside_the_mito_skip(bam):
     """The skip must not hide a broken reconciler.
 
