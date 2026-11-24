@@ -209,6 +209,18 @@ def run_diff(args) -> int:
         ordered = a_ids + [b_by_pair[pair] for pair in a_pairs]
         mat = mat[:, [sample_ids.index(sid) for sid in ordered]]
         mask_a = np.array([True] * len(a_ids) + [False] * len(a_ids))
+    # `--design-factors` is only honoured by the deseq2 adapter. Accepting it
+    # elsewhere and dropping it silently would hand back an unadjusted p-value
+    # that looks adjusted, so say so instead.
+    factors_raw = getattr(args, "design_factors", None)
+    if factors_raw and method != "deseq2":
+        raise ValueError(
+            "--design-factors only applies to --method deseq2; the %r test has no "
+            "mechanism to absorb an additive covariate, so it would be dropped "
+            "without changing any number. Use --method deseq2, or remove the flag "
+            "to accept an unadjusted result knowingly." % method
+        )
+
     if method == "deseq2":
         # A negative-binomial count model, not a rank test. The adapter refuses
         # non-integer or negative input and requires replicates, because DESeq2's
