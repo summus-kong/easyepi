@@ -147,6 +147,18 @@ def build_namespace(*, treatment: list[str], out_dir: Path, name: str, genome: s
         return options, provenance
 
     provenance["namespace_from"] = "fallback"
+    if passthrough:
+        # The fallback Namespace has a fixed attribute set, so a passthrough token
+        # that maps to anything outside it would be accepted here and then ignored
+        # by MACS3 -- it reads ``options.<attr>``, and an attribute that was never
+        # set is a default, not the caller's value. Refusing is the only outcome
+        # that does not misreport what ran.
+        raise ValueError(
+            "cannot apply --macs-arg options: MACS3's argument parser could not "
+            "be read (%s), so these tokens would be silently ignored: %s\n"
+            "  Fix the install so the `macs3` console script sits next to the "
+            "interpreter, or drop --macs-arg and use the modelled options."
+            % (error or "unknown reason", " ".join(passthrough)))
     return _fallback_namespace(treatment=treatment, out_dir=out_dir, name=name,
                                genome=genome, fmt=fmt, broad=broad,
                                control=control, qvalue=qvalue, extsize=extsize,

@@ -8,7 +8,7 @@ interface when they are installed:
   * **HOMER**   — ``findMotifsGenome.pl`` / ``findMotifs.pl`` (de novo + known)
   * **MEME Suite** — ``meme``/``dreme``/``streme`` (de novo), ``fimo`` (scan),
     ``tomtom`` (compare)
-  * **TOBIAS**  — TF footprint (``TOBIAS Footprint``)
+  * **TOBIAS**  — TF footprint (``TOBIAS ScoreBigwig``)
 
 Each backend is only usable if the corresponding executable is present; a
 missing tool raises a clear ``ToolNotAvailableError`` telling the user how to
@@ -199,15 +199,21 @@ def run_tomtom_compare(motif_db: str, query_motif_file: str, out_dir: str) -> di
 # ---------------------------------------------------------------------------
 def run_tobias_footprint(bigwig_paths: Sequence[str], bed_path: str, genome: str,
                          out_dir: str, motif_db: Optional[str] = None) -> dict:
-    """Run ``TOBIAS Footprint`` on ATAC/CUT&Tag bigwigs (optional dep)."""
+    """Run ``TOBIAS ScoreBigwig`` on an ATAC/CUT&Tag cut-site bigWig.
+
+    TOBIAS renamed this step: 0.17.5 accepts ``ScoreBigwig`` (and the
+    legacy ``FootprintScores``); ``Footprint`` was never a subcommand.
+    """
     executable = _require("TOBIAS", install_hint="pip install tobias")
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     if len(bigwig_paths) != 1:
-        raise ValueError("Run TOBIAS Footprint separately for each bias-corrected signal track")
+        raise ValueError("Run TOBIAS ScoreBigwig separately for each bias-corrected signal track")
     if motif_db is not None:
         raise ValueError("Footprint scores signal; motif binding inference requires a separate BINDetect step")
-    cmd = [executable, "Footprint", "--cores", "4", "--signal", str(bigwig_paths[0]),
+    # TOBIAS 0.17.5 has no `Footprint` subcommand; `ScoreBigwig` is its
+    # documented replacement for `FootprintScores` and takes no --cores.
+    cmd = [executable, "ScoreBigwig", "--signal", str(bigwig_paths[0]),
            "--regions", bed_path, "--output", str(out / "footprint.bw")]
     res = _run(cmd)
     return {"backend": "tobias", "available": True, "command": " ".join(cmd),

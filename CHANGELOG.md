@@ -90,6 +90,38 @@
   model difference and skips cleanly when `macs3` is absent. Non-claims are stated
   in `docs/dev/MACS3_COMPARISON.md`.
 
+- **`--macs-arg` can no longer be silently dropped.** `build_namespace` builds
+  MACS3's argv and parses it with MACS3's own argparse, which supports every
+  option; when that parser cannot be read it falls back to a hand-written
+  Namespace with a fixed attribute set. Extra tokens used to be appended to the
+  argv, recorded in the provenance, and then ignored -- the run reported a
+  passthrough that never reached the calculation. It now raises, naming the
+  tokens and the reason, because refusing is the only outcome that does not
+  misreport what ran. `tests/test_peaks_is_macs3.py` also pins, end to end, that
+  a real `easyepi peaks` run writes the same peak coordinates as a direct
+  `macs3 callpeak` invocation with the same options -- the command is MACS3, so
+  agreement is a definition rather than a coincidence.
+- **`run_tobias_footprint` named a subcommand TOBIAS does not have.** It built
+  `TOBIAS Footprint --cores 4`; 0.17.5 rejects `Footprint` at argument parsing
+  and `FootprintScores --help` states that `ScoreBigwig` replaces it, with usage
+  `ScoreBigwig --signal <bw> --regions <bed> --output <bw>` and no `--cores`.
+  Two defects in one call, and nothing invoked it, so it could never have worked.
+  Now `ScoreBigwig` with the three documented options;
+  `tests/test_tobias_command.py` pins the subcommand against TOBIAS's accepted
+  list, the absence of `--cores`, and invokes the real binary.
+- **`easyepi.motifs.scan_sequences` agrees with FIMO on where the site is.** On a
+  12-sequence fixture (planted consensus, its reverse complement, and noise) the
+  best window matches in 11/12 cases and the ranking of best-window scores is
+  Spearman rho = 1.000; the one disagreement is a noise-only sequence within 1 bp
+  of a tie. The absolute scores are deliberately not compared -- on four fixed
+  7-mers the difference changes sign with base composition (GATATCA +0.40,
+  GGGGGGG -1.14), and a constant offset, a pseudocount and background smoothing
+  were each ruled out, so FIMO's `score` is its own statistic. No downstream
+  decision uses it: a motif call comes from a threshold or a ranking.
+  `tests/test_motifs_fimo_agreement.py` and `tests/oracle/compare_to_fimo.py`.
+  Details, including the two harness bugs that would have made the comparison
+  vacuous: `docs/dev/TOOL_COMPARISONS.md`.
+
 ### Changed
 
 - **Coverage metadata names the counting unit.** `bam2bw` now writes a
