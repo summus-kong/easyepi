@@ -75,6 +75,21 @@
   axis. Verified end to end on a synthetic ATAC fixture (score 50.57, profile
   4001 values, `tss_profile.png` written): 960 tests pass before and after.
 
+- **`easyepi peaks` is compared against MACS3, and the numbers are pinned.**
+  `tests/oracle/compare_to_macs3.py` builds a 400 kb fixture with six planted peaks
+  of known width over uniform background, calls it with both `easyepi peaks`
+  (200 bp bins, global median background, Poisson tail) and
+  `macs3 callpeak --nomodel --extsize 200`, and prints four tables: recovery of
+  each planted region, peaks invented outside them, interval Jaccard, and edge
+  agreement. Measured with MACS3 3.0.4: easyepi recovers 100% of every planted
+  region and invents none; MACS3 recovers 97.6% and reports one extra background
+  peak; interval Jaccard 0.831; median edge disagreement 95 bp left / 90 bp right,
+  sub-bin against a 200 bp bin. The callers use different background models
+  (global median vs local lambda), so identity is neither expected nor asserted;
+  `tests/test_peaks_macs3_agreement.py` holds the four properties that survive the
+  model difference and skips cleanly when `macs3` is absent. Non-claims are stated
+  in `docs/dev/MACS3_COMPARISON.md`.
+
 ### Changed
 
 - **Coverage metadata names the counting unit.** `bam2bw` now writes a
