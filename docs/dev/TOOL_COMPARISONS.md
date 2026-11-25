@@ -100,6 +100,48 @@ Fixed to `ScoreBigwig` with the three documented options.
 list, pins the absence of `--cores`, and invokes the real binary so a future
 rename fails loudly.
 
+### The two scores are the same quantity in different units
+
+`easyepi footprint` also reports a per-locus footprint score, so a second
+implementation does exist and the numbers can be compared. Read from TOBIAS
+0.17.5's own Cython source (`tobias/utils/signals.pyx`,
+`tobias_footprint_array`):
+
+```
+fp_sum     = sum of the NEGATIVE values inside the footprint window
+fp_mean    = fp_sum / footprint_w                 (<= 0)
+flank_mean = (left_sum + right_sum) / (2 * flank_w)
+footprint  = flank_mean - fp_mean                 additive, raw-signal units
+```
+
+and `easyepi.footprint.footprint_profile` computes
+
+```
+score = (shoulder_baseline - centre) / shoulder_baseline      fractional
+```
+
+With the same windows these are related by exactly
+
+```
+TOBIAS == flank_level * easyepi
+```
+
+**Measured: ratio = 1.000000 on all seven sites** (min = max = mean),
+`tests/test_tobias_footprint_score.py::test_tobias_score_equals_flank_level_times_easyepi`.
+The relation is an identity, not an approximation, so it is asserted at
+`rel=1e-6`.
+
+### Why an obvious fixture silently produced a constant
+
+TOBIAS accumulates **only negative values** into `fp_sum`. A first probe used a
+purely positive dip (flanks 10.0, centre 3.0) — the shape an ATAC track has
+before correction — and every output value came back as exactly 10.0. That is
+TOBIAS's definition working as written, not a failure: with no negative values
+`fp_mean = 0` and `footprint = flank_mean`. A comparison therefore has to use an
+ATACorrect-style track where the footprint is negative.
+`test_purely_positive_dip_leaves_tobias_at_the_flank_level` pins this so the
+constraint is documented rather than rediscovered.
+
 ## What none of this establishes
 
 - **Not a real cohort.** All three fixtures are synthetic with known ground truth.
@@ -110,10 +152,11 @@ rename fails loudly.
   between motifs.
 - **Not enrichment statistics.** FIMO's q-value and easyepi's HOMER-like
   enrichment are different statistics on different inputs.
-- **TOBIAS is verified as a command, not as a footprint score.** The wrapper now
-  invokes a real subcommand with real options; no footprint output has been
-  compared against a reference, because there is no second implementation to
-  compare it to.
+- **TOBIAS is verified as a score relation, not on real data.** The identity
+  `TOBIAS == flank_level * easyepi` holds on a synthetic track where both windows
+  are configured to match (`--flank-min/--flank-max/--fp-min/--fp-max`). TOBIAS's
+  own window search, `ATACorrect` normalisation, and `BINDetect` differential
+  testing are not covered.
 
 ## Status against backlog item 12
 
@@ -121,7 +164,7 @@ rename fails loudly.
 |---|---|
 | MACS3 | **DONE** — equivalence is architectural; passthrough and refusal are pinned |
 | MEME/FIMO | **DONE** — best window 11/12, ranking ρ = 1.000; score scale documented as incomparable |
-| TOBIAS | **PARTIAL** — the broken command is fixed and pinned; no score comparison exists |
+| TOBIAS | **DONE** - broken command fixed and pinned; score identity `TOBIAS = flank_level x easyepi` measured at ratio 1.000000 |
 | ChromHMM | TODO |
 | HOMER | TODO |
 | real cohort | TODO |

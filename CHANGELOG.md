@@ -495,6 +495,19 @@ it cannot be estimated, and dropping it silently would hide a design mistake.
 ## 0.5.3
 
 ### Fixed
+- **`easyepi footprint`'s score is TOBIAS's footprint score divided by the
+  flank level.** TOBIAS 0.17.5's `tobias_footprint_array` reports
+  `flank_mean - fp_mean` in raw-signal units while `footprint_profile` reports
+  `(shoulder - centre) / shoulder`, so the two are related by
+  `TOBIAS = flank_level * easyepi`. Measured ratio on seven synthetic sites:
+  **1.000000** (min = max = mean), asserted at `rel=1e-6` in
+  `tests/test_tobias_footprint_score.py`. The TOBIAS side runs the real binary.
+- Note the definitional constraint this uncovered: TOBIAS accumulates only
+  **negative** values into its footprint sum, so a footprint that is merely a
+  dip in an all-positive track leaves its score at the flank level exactly. A
+  comparison has to use an ATACorrect-style (negative) footprint;
+  `test_purely_positive_dip_leaves_tobias_at_the_flank_level` pins that so it is
+  documentation rather than a rediscovered surprise.
 
 - **3 bp UTR slivers were emitted as real UTR intervals.** GENCODE defines some CDS
   blocks so a start or stop codon straddles an exon boundary, leaving a 1-3 bp piece
