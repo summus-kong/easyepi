@@ -75,20 +75,18 @@
   axis. Verified end to end on a synthetic ATAC fixture (score 50.57, profile
   4001 values, `tss_profile.png` written): 960 tests pass before and after.
 
-- **`easyepi peaks` is compared against MACS3, and the numbers are pinned.**
-  `tests/oracle/compare_to_macs3.py` builds a 400 kb fixture with six planted peaks
-  of known width over uniform background, calls it with both `easyepi peaks`
-  (200 bp bins, global median background, Poisson tail) and
-  `macs3 callpeak --nomodel --extsize 200`, and prints four tables: recovery of
-  each planted region, peaks invented outside them, interval Jaccard, and edge
-  agreement. Measured with MACS3 3.0.4: easyepi recovers 100% of every planted
-  region and invents none; MACS3 recovers 97.6% and reports one extra background
-  peak; interval Jaccard 0.831; median edge disagreement 95 bp left / 90 bp right,
-  sub-bin against a 200 bp bin. The callers use different background models
-  (global median vs local lambda), so identity is neither expected nor asserted;
-  `tests/test_peaks_macs3_agreement.py` holds the four properties that survive the
-  model difference and skips cleanly when `macs3` is absent. Non-claims are stated
-  in `docs/dev/MACS3_COMPARISON.md`.
+- **`easyepi peaks` is MACS3, and that is now pinned rather than assumed.**
+  The command imports `MACS3.Commands.callpeak_cmd` and calls `run()` on a
+  Namespace built from MACS3's own argument parser, so "output equivalence" is
+  the definition rather than a property to measure. What is measured instead:
+  the run emits MACS3's own peak file (coordinates identical to a direct
+  `macs3 callpeak`), `--macs-arg` reaches the parsed Namespace, a rejected option
+  raises naming its tokens, and a missing parser refuses rather than accepting
+  tokens it cannot apply. An earlier changelog entry here described a
+  hand-written Poisson caller compared against MACS3 as a peer; that caller had
+  already been retired and the comparison was withdrawn. See
+  `docs/dev/TOOL_COMPARISONS.md` and `tests/test_peaks_is_macs3.py`.
+
 
 - **`--macs-arg` can no longer be silently dropped.** `build_namespace` builds
   MACS3's argv and parses it with MACS3's own argparse, which supports every
