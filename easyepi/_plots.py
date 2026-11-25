@@ -438,6 +438,54 @@ def plot_tss_enrichment(frame, title: str = "TSS enrichment"):
     return fig
 
 
+def plot_tss_profile(profiles, title: str = "TSS enrichment profile"):
+    """Metagene of the per-base TSS pileup, one line per sample.
+
+    ``profiles`` is a list of ``(label, detail)`` where ``detail`` is the
+    ``tss_enrichment_detail`` dict a QC record carries: its ``profile`` is the
+    binned pileup and ``profile_center_index`` locates the TSS bin, so the x axis
+    is rebuilt rather than guessed from the list length.
+
+    This is the plot the scalar bar chart cannot replace. The ENCODE score says
+    whether the signal is enriched; the *shape* says whether the enrichment is a
+    sharp TSS-proximal peak with a flat background (a good ATAC library) or a
+    broad hump that happens to peak (fragmented or over-tagmented DNA). Two
+    samples with the same score can look nothing alike here, which is exactly the
+    reason to draw it.
+    """
+    plt = _mpl()
+    import numpy as np
+
+    usable = []
+    for label, detail in profiles or []:
+        if not isinstance(detail, dict):
+            continue
+        values = detail.get("profile")
+        if not isinstance(values, list) or len(values) < 3:
+            continue
+        centre = detail.get("profile_center_index")
+        if not isinstance(centre, int):
+            centre = len(values) // 2
+        # ``profile`` is the 1 bp pileup, so each step is one base and the TSS is
+        # at ``centre``. Deriving the axis from the list itself keeps the plot
+        # right for any flank width without the caller passing one.
+        offsets = np.arange(len(values), dtype=float) - float(centre)
+        usable.append((str(label), offsets, np.asarray(values, dtype=float)))
+    if not usable:
+        return None
+
+    fig, ax = plt.subplots(figsize=(6.4, 3.8))
+    for label, offsets, values in usable:
+        ax.plot(offsets, values, lw=1.4, label=label)
+    ax.axvline(0.0, color="#9aa0aa", lw=.8, ls=":")
+    ax.set_xlabel("distance from TSS (bp)")
+    ax.set_ylabel("cut sites per base")
+    ax.set_title(title)
+    if len(usable) <= 12:
+        ax.legend(frameon=False, fontsize=7)
+    return fig
+
+
 def plot_read_quality(frame, title: str = "Duplication and mitochondrial fraction"):
     """Grouped bars for duplicate rate and mitochondrial fraction.
 
@@ -612,6 +660,7 @@ def _assay_metric_frame(out_dir: Path):
     rows: list[dict] = []
     beta_lists: list[list[float]] = []
     fragment_samples: list[list[float]] = []
+    tss_profiles: list[tuple[str, dict]] = []
     # Any JSON in the output directory, not just names ending in `_qc.json`.
     # `qc --out` writes whatever filename the user chose (`atac.json`), so the old
     # pattern matched nothing for a plain `qc` run and every assay figure
@@ -660,9 +709,16 @@ def _assay_metric_frame(out_dir: Path):
                             expanded.extend([centre] * max(0, int(round(frac * 1000))))
                         if expanded:
                             beta_lists.append(expanded)
+                elif isinstance(value, dict) and key == "tss_enrichment_detail":
+                    # The pileup is nested one level deeper than every scalar the
+                    # frame keeps, so it was dropped here and no metagene could be
+                    # drawn from a qc run even though the profile was computed.
+                    if isinstance(value.get("profile"), list):
+                        tss_profiles.append((str(record.get("sample_id")), value))
             if len(row) > 2:
                 rows.append(row)
-    return (pd.DataFrame(rows) if rows else None), beta_lists, fragment_samples
+    return ((pd.DataFrame(rows) if rows else None), beta_lists,
+            fragment_samples, tss_profiles)
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -916,7 +972,8 @@ def render_module_figures(module: str, out: str | Path,
         # Assay-specific QC figures: the generic bar chart cannot show fragment
         # periodicity, FRiP quality or methylation bimodality.
         if "qc" in module_key:
-            assay_frame, beta_lists, fragment_samples = _assay_metric_frame(out_dir)
+            (assay_frame, beta_lists, fragment_samples,
+             tss_profiles) = _assay_metric_frame(out_dir)
             if assay_frame is not None:
                 if "median_fragment_length" in assay_frame.columns:
                     fig = plot_fragment_length(assay_frame,
@@ -938,6 +995,14 @@ def render_module_figures(module: str, out: str | Path,
                     fig = plot_tss_enrichment(assay_frame)
                     if fig:
                         made.extend(_save(fig, fig_dir, "tss_enrichment",
+                                          formats=tuple(formats)))
+                if tss_profiles:
+                    # The bar chart answers "is it enriched"; this answers "what
+                    # shape is the enrichment". Both are needed and neither
+                    # replaces the other.
+                    fig = plot_tss_profile(tss_profiles)
+                    if fig:
+                        made.extend(_save(fig, fig_dir, "tss_profile",
                                           formats=tuple(formats)))
                 if {"duplicate_rate", "mitochondrial_fraction"} & set(assay_frame.columns):
                     fig = plot_read_quality(assay_frame)

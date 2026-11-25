@@ -57,6 +57,24 @@
   column order). `tests/test_timecourse_stage_columns.py` pins the column count
   at 3, 4, 5 and 7 stages.
 
+- **QC figures now include a TSS metagene, not just the enrichment score.**
+  `tss_enrichment` had always returned the full per-base pileup in `profile`, but
+  no figure read it: `_assay_metric_frame` keeps scalars plus two special-cased
+  lists, so the nested `tss_enrichment_detail` was dropped and
+  `plot_tss_enrichment` drew only the scalar ratio. The score says *whether* the
+  signal is TSS-enriched; the shape says whether that enrichment is a sharp
+  TSS-proximal peak over a flat background (a good ATAC library) or a broad hump
+  that happens to peak (fragmented or over-tagmented DNA), and two samples with
+  the same score can differ entirely in shape. `plot_tss_profile` draws one curve
+  per sample with its x axis derived from `profile_center_index`, so a peak at the
+  TSS lands at 0 rather than at whatever the list midpoint happens to be.
+  `profile` keeps its documented length of `2*flank+1`: an earlier attempt binned
+  it to shrink the JSON and was reverted, because `tests/test_tss_enrichment.py`
+  asserts that length and a resampled series would have silently moved the
+  TSS. `tests/test_tss_profile_figure.py` pins the plumbing, the length and the
+  axis. Verified end to end on a synthetic ATAC fixture (score 50.57, profile
+  4001 values, `tss_profile.png` written): 960 tests pass before and after.
+
 ### Changed
 
 - **Coverage metadata names the counting unit.** `bam2bw` now writes a

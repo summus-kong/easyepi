@@ -42,7 +42,6 @@ __all__ = ["read_tss_table", "tss_enrichment"]
 #: Contigs that never carry a TSS and whose reads would only distort the background.
 _SKIP_PREFIXES = ("chrM", "MT", "chrUn", "chrEBV", "_")
 
-
 def _looks_like_annotation(path: str) -> bool:
     """Whether the file is a GTF/GFF, judged by its rows rather than its name.
 
@@ -391,5 +390,9 @@ def tss_enrichment(
         "flank": flank,
         "center": center,
         "flank_bg": flank_bg,
+        # The per-base pileup, unchanged: one value per base across the window.
+        # ``profile_center_index`` states which index is the TSS rather than
+        # leaving a consumer to assume it is the midpoint of the list.
         "profile": [int(x) for x in profile],
+        "profile_center_index": int(width // 2),
     }
