@@ -35,6 +35,28 @@
   helpers used by all six entry points, and
   `tests/test_qc_entry_point_parity.py` fails if they drift apart again.
 
+- **`easyepi timecourse` ranks features by time-point specificity (TAU).**
+  Answers two separate questions and keeps them apart: how *concentrated* a
+  feature's profile is on one time point (TAU, Yanai et al. 2005) and whether it
+  *trends* monotonically over time (Spearman). TAU is descriptive and carries no
+  p-value anywhere, because treating it as a test statistic is the usual way the
+  number gets misread. Counts are collapsed to per-time means before TAU so
+  uneven replicate numbers do not weight a time point above its measurement, and
+  the wide table writes **one `spec_<stage>` column per time point** beside the
+  global `tau`; `max(spec) == tau` by construction, so the wide table, the
+  `<out>.by_stage.tsv` long form and the JSON summary cannot tell contradictory
+  stories. An all-zero feature reports a blank, not `0` -- "not measurable" is
+  not "measured, no specificity" -- and it no longer aborts the run: the
+  replicate diagnostic collected `tau_specificity`'s `None` and then called
+  `min()` on it, so one silent feature killed the whole run with a `TypeError`
+  before the blank row could be written. Three preconditions are enforced rather
+  than assumed: non-negative input (an absolute value would manufacture
+  specificity), at least three distinct time points (with two, tau is a
+  deterministic function of the ratio and cannot rank), and a design whose
+  `sample_id`/`time` match the matrix (time points are never inferred from
+  column order). `tests/test_timecourse_stage_columns.py` pins the column count
+  at 3, 4, 5 and 7 stages.
+
 ### Changed
 
 - **Coverage metadata names the counting unit.** `bam2bw` now writes a
