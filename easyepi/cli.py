@@ -50,6 +50,7 @@ MINIMAL_EXAMPLE: dict[str, str] = {
     "concordance": "easyepi concordance --peaks A1=peaks/A1.bed,A2=peaks/A2.bed "
                    "--design design.tsv --out conc/",
     "viz": "easyepi viz --regions regions.bed --out viz/ --figure-format pdf",
+    "timecourse": "easyepi timecourse --counts counts.tsv --design design.tsv --out tau.tsv",
     "washu": "easyepi washu --manifest tracks.tsv --out washu/",
     "init": "easyepi init /data/bams --out project.toml",
     "validate-project": "easyepi validate-project --project project.toml --out v/",
@@ -278,6 +279,11 @@ def _cmd_nucleosome(args):
     result = run_nucleosome(args)
     _render_cli_figures("nucleosome", args)
     return result
+
+
+def _cmd_timecourse(args):
+    from easyepi.timecourse_cli import run_timecourse
+    return run_timecourse(args)
 
 
 def _cmd_diff(args):
@@ -943,6 +949,30 @@ def build_parser() -> argparse.ArgumentParser:
                    help="path of the comparison table to write; the parent directory must already exist")
     add_figure_args(p_df)
     p_df.set_defaults(func=_cmd_diff)
+
+    p_tc = sub.add_parser(
+        "timecourse",
+        help="time-course specificity (TAU) and monotonic trend per feature",
+        description=(
+            "Score how concentrated each feature is on a single time point "
+            "(TAU) and test for a monotonic trend over time (Spearman). TAU is "
+            "descriptive: it carries no p-value and says nothing about whether "
+            "the shape reproduces between replicates."),
+        epilog=(
+            "Design TSV columns: sample_id and time, both required. time may be "
+            "numeric (0, 2, 6, 24) or ordered labels; at least 3 distinct points "
+            "are required. Replicates at the same time are averaged before TAU, "
+            "and one column is written per time point."),
+    )
+    p_tc.add_argument("--counts", required=True,
+                      help="count matrix TSV, features x samples, first column is the feature id")
+    p_tc.add_argument("--design", required=True,
+                      help="sample sheet TSV with sample_id and time; time points "
+                           "are never inferred from column order")
+    p_tc.add_argument("--out", required=True,
+                      help="path of the per-feature table; a sibling <out>.json "
+                           "summary and <out>.by_stage.tsv are written next to it")
+    p_tc.set_defaults(func=_cmd_timecourse)
 
     p_cc = sub.add_parser(
         "concordance",

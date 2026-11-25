@@ -76,6 +76,7 @@ nav:
       - dmr: commands/dmr.md
       - differential-peaks: commands/differential-peaks.md
       - diff: commands/diff.md
+      - timecourse: commands/timecourse.md
       - concordance: commands/concordance.md
       - visualisation: commands/viz.md
   - API reference:
