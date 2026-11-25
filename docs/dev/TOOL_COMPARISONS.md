@@ -142,6 +142,71 @@ ATACorrect-style track where the footprint is negative.
 `test_purely_positive_dip_leaves_tobias_at_the_flank_level` pins this so the
 constraint is documented rather than rediscovered.
 
+## ChromHMM — input contract and a trained model
+
+ChromHMM 1.28 is installed (`share/chromhmm-1.28-0/ChromHMM.jar`, Java 8) and both
+stages run: `BinarizeBed` on real hg38 chromosome lengths from
+`reference/human/genome.fa.fai`, then `LearnModel`.
+
+### The trained model recovers the planted structure
+
+Measured with two marks over **disjoint** regions of chr1 (H3K4me3 at 1–20 Mb,
+H3K27ac at 30–60 Mb) and `-peaks`, asking for three states:
+
+* 11 artifacts written (`model_3.txt`, `emissions_3.txt`, `transitions_3.txt`,
+  `ct_3_segments.bed`, dense/expanded BEDs, PNG/SVG emissions and transitions)
+* 9801 segments; **all three states used** (`E1`, `E2`, `E3`)
+* the emission matrix separates the marks exactly as planted:
+
+| state | H3K27ac | H3K4me3 |
+|---|---|---|
+| 1 | 2.9e-25 | 3.0e-27 |
+| 2 | **0.999999999** | 4.0e-222 |
+| 3 | 6.4e-211 | **0.999999999** |
+
+So training is verified as *recovering the signal*, not against a golden number:
+the assertions require two different states to dominate the two marks and a third
+to emit neither.
+
+### Two ways to get there were wrong at first
+
+`LearnModel` aborts with
+
+    On this data the INFORMATION initialization strategy can only support 2 states
+
+if the fixture binarizes one mark and asks for three. Two corrections were
+needed, both matching what `easyepi/specific/histone/chromhmm.py` emits: pass
+`-peaks` (ChIP marks are peak calls, not raw signal) and give the model two marks
+with disjoint occupancy. A single mark has only present/absent structure, which
+is why the reported ceiling is 2.
+
+### The input contract, because four rules bite silently
+
+| rule | what happens when broken |
+|---|---|
+| cellmarkfiletable is the 3rd positional arg | with no args: usage banner, **exit 0**; with some: `-b` is read as the lengths file and throws `FileNotFoundException: -b` |
+| file column is a **bare filename** | a path is concatenated with the bed dir, giving `<bed>/<bed>/x.bed` |
+| column 2's mark name must match the file | `Warning did not find data for ... treating as missing`, zero bins |
+| BED needs a strand column (6 cols) | `strand column expected, but not found` |
+
+The bare-filename rule costs the most time: a caller who writes the natural thing
+— the full path they already hold — gets a `FileNotFoundException` naming a
+doubled path, which reads like a ChromHMM defect.
+
+## HOMER — FASTA mode works, genome mode does not
+
+`findMotifsGenome.pl`, `findMotifs.pl` and `homer2` are all present, and the
+motif library under `share/homer/motifs` is complete. But
+`share/homer/data/genomes` **does not exist**, so `findMotifsGenome.pl` has no
+genome to scan and the genome mode is unusable in this environment.
+
+`easyepi.motifs.external_tools.run_homer_motifs` therefore has exactly one
+usable path here: FASTA mode, which requires an explicit background FASTA and
+refuses without one (`ValueError`). With target and background it runs and
+writes `homerResults` / `knownResults`.
+
+Install for genome mode: `$ENV/share/homer/configureHomer.pl -install hg38`.
+
 ## What none of this establishes
 
 - **Not a real cohort.** All three fixtures are synthetic with known ground truth.
@@ -158,6 +223,14 @@ constraint is documented rather than rediscovered.
   own window search, `ATACorrect` normalisation, and `BINDetect` differential
   testing are not covered.
 
+- **ChromHMM's model is verified structurally, not against a reference
+  segmentation.** Training recovers the planted two-mark structure, but no state
+  call is compared to a published annotation, and the emission/transition values
+  depend on the seed.
+- **HOMER's enrichment is not compared.** FASTA mode runs, but HOMER's
+  hypergeometric enrichment is not reproduced or cross-checked by easyepi's own
+  `homer_like` implementation.
+
 ## Status against backlog item 12
 
 | tool | status |
@@ -165,6 +238,6 @@ constraint is documented rather than rediscovered.
 | MACS3 | **DONE** — equivalence is architectural; passthrough and refusal are pinned |
 | MEME/FIMO | **DONE** — best window 11/12, ranking ρ = 1.000; score scale documented as incomparable |
 | TOBIAS | **DONE** - broken command fixed and pinned; score identity `TOBIAS = flank_level x easyepi` measured at ratio 1.000000 |
-| ChromHMM | TODO |
-| HOMER | TODO |
+| ChromHMM | **DONE** — BinarizeBed and LearnModel run on real hg38 lengths; trained model recovers the planted two-mark structure; input contract pinned |
+| HOMER | **PARTIAL** — FASTA mode runs and is pinned; genome mode blocked (no installed genome) |
 | real cohort | TODO |

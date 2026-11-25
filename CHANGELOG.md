@@ -493,6 +493,35 @@ it cannot be estimated, and dropping it silently would hide a design mistake.
 ## 0.5.3
 
 ### Fixed
+- **ChromHMM and HOMER input contracts are now measured and pinned.** Both tools
+  are installed, so `tests/test_chromhmm_homer_inputs.py` runs them rather than
+  mocking them. ChromHMM's `BinarizeBed` was exercised on real hg38 chromosome
+  lengths from `reference/human/genome.fa.fai`; four input rules are easy to get
+  wrong and two fail silently or misleadingly:
+  the `cellmarkfiletable` is a mandatory positional argument, and with no
+  arguments ChromHMM prints its usage banner and **exits 0** (with some of them it
+  reads `-b` as the lengths file and throws `FileNotFoundException: -b`); the
+  file column must be a **bare filename**, because ChromHMM prefixes it with the
+  bed directory, so a full path becomes `<bed>/<bed>/x.bed`; the mark name in
+  column 2 must match the file's contents or it logs "did not find data" and
+  writes no bins; and BED files need a strand column.
+- **HOMER: FASTA mode runs, genome mode is blocked here.** `findMotifsGenome.pl`
+  is installed but `share/homer/data/genomes` is absent, so there is no genome to
+  scan. `run_homer_motifs` therefore has one usable path in this environment:
+  FASTA mode with an explicit background, which it refuses to run without
+  (`ValueError`). Both the refusal and the successful run are pinned.
+- **ChromHMM `LearnModel` now trains and the model recovers the planted
+  structure.** Two marks over disjoint chr1 regions plus `BinarizeBed -peaks`
+  produce 11 model artifacts and 9801 segments with all three states used; the
+  emission matrix separates the marks (one state emits H3K27ac at ~1.0, another
+  H3K4me3 at ~1.0, a third neither). Asserted as structure recovered, not as a
+  golden number, because the emission values depend on the seed.
+- Two ways to reach that were wrong at first and are now pinned: a single mark
+  binarization makes `LearnModel` abort with "the INFORMATION initialization
+  strategy can only support 2 states" (the ceiling is the honest present/absent
+  count), and omitting `-peaks` gives ChIP tracks the wrong treatment.
+- HOMER's enrichment statistics remain **not** compared; `docs/dev/TOOL_COMPARISONS.md`
+  records that as an open limit rather than implying agreement.
 - **`easyepi footprint`'s score is TOBIAS's footprint score divided by the
   flank level.** TOBIAS 0.17.5's `tobias_footprint_array` reports
   `flank_mean - fp_mean` in raw-signal units while `footprint_profile` reports

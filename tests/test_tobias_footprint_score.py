@@ -23,6 +23,10 @@ its `fp_sum` accumulates only negative values, so a purely positive dip makes it
 report the flank level unchanged.
 
 Measured ratio on seven sites: 1.000000 (min = max = mean).
+
+The TOBIAS invocation is retried once: inside a full-suite run its internal
+`multiprocessing.Manager()` fork sometimes cannot start, and that is a
+process-creation failure rather than a different score.
 """
 from __future__ import annotations
 
@@ -70,6 +74,14 @@ def _track(tmp_path, centres):
     return bw_path, np.array(values, dtype=float)
 
 
+#: TOBIAS starts a multiprocessing.Manager, which forks. Inside a long pytest
+#: session a fork occasionally cannot be created (measured: whole-suite run only,
+#: no single test file reproduces it, 70 files bisected). That is a failure to
+#: start, not a wrong number, so one retry is legitimate; a genuine inability to
+#: run fails both attempts and still fails the test.
+_ATTEMPTS = 2
+
+
 def _score_with_tobias(tmp_path, bw_path, centres):
     bed = tmp_path / "sites.bed"
     bed.write_text("".join("chr1\t%d\t%d\ts%d\n" % (c - 200, c + 200, i)
@@ -79,9 +91,19 @@ def _score_with_tobias(tmp_path, bw_path, centres):
            "--regions", str(bed), "--output", str(out), "--score", "footprint",
            "--flank-min", str(FLANK_MIN), "--flank-max", str(FLANK_MAX),
            "--fp-min", str(FP_MIN), "--fp-max", str(FP_MAX)]
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    assert proc.returncode == 0, proc.stdout.decode()[-1500:]
-    assert out.exists(), "TOBIAS produced no bigWig"
+
+    text = ""
+    for attempt in range(_ATTEMPTS):
+        if out.exists():
+            out.unlink()
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        text = proc.stdout.decode(errors="replace")
+        if proc.returncode == 0 and out.exists():
+            break
+    else:
+        raise AssertionError(
+            "TOBIAS failed to produce output after %d attempts:\n%s"
+            % (_ATTEMPTS, text[-1500:]))
 
     bw = pyBigWig.open(str(out))
     vals = [bw.values("chr1", c, c + 1)[0] for c in centres]
