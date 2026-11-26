@@ -134,14 +134,21 @@ def background_positions(region_length: int):
     return random.sample(range(region_length), n)
 
 
-def score_tfbs(hits, region_start: int, motif_lengths, signals: dict):
-    """Attach per-condition scores to each hit, reading at the TFBS midpoint.
+def score_tfbs(hits, motif_lengths, signals: dict):
+    """Attach per-condition scores to each hit, read at the TFBS midpoint.
 
-    ``signals`` maps condition name -> array of footprint values over the region.
+    ``hits`` carry *region-relative* coordinates (``start``/``end`` already had
+    ``region.start`` subtracted), and ``signals`` maps condition name -> array of
+    footprint values over the same region, so the midpoint indexes the array
+    directly:
+
+        pos = TFBS.start - region.start + int(motif_length / 2)
+
+    with the subtraction already applied when the hits were built.
     """
     rows = []
     for motif_idx, start, end, strand, _score in hits:
-        mid = midpoint_offset(start, region_start, motif_lengths[motif_idx])
+        mid = midpoint_offset(start, 0, motif_lengths[motif_idx])
         row = {"motif": motif_idx, "start": start, "end": end, "strand": strand,
                "mid": mid}
         for cond, values in signals.items():
@@ -163,14 +170,14 @@ def finalize_tfbs(rows, norm_objects: dict, thresholds: dict, pseudo: float,
             original = row[cond]
             value = float(norm.normalize(original))
             value = value if value > 0 else 0.0
-            row[cond + "_score"] = round(value, 5)
+            row[cond + "_score"] = float("{0:.5f}".format(value))
             row[cond + "_bound"] = 1 if row[cond + "_score"] > thresholds[cond] else 0
 
         for cond1, cond2 in comparisons:
             base = "{0}_{1}".format(cond1, cond2)
-            row[base + "_log2fc"] = round(
-                float(np.log2((row[cond1 + "_score"] + pseudo)
-                              / (row[cond2 + "_score"] + pseudo))), 5)
+            fc = float(np.log2((row[cond1 + "_score"] + pseudo)
+                               / (row[cond2 + "_score"] + pseudo)))
+            row[base + "_log2fc"] = float("{0:.5f}".format(fc))
     return rows
 
 
@@ -188,3 +195,65 @@ def mean_log2fc_per_peak(rows, peak_ids, base: str):
             out.append(float(np.mean(vals_sorted[start:i])))
             start = i
     return np.asarray(out)
+
+
+def sample_signal(bw, chrom: str, start: int, end: int):
+    """Footprint values over ``[start, end)`` as a numpy array.
+
+    Mirrors ``region.get_signal``: missing values come back as ``NaN`` so that the
+    downstream ``nanmean``-style statistics skip them rather than treating them as
+    zero.
+    """
+    if bw is None:
+        raise ValueError("a bigWig handle is required")
+    if end <= start:
+        return np.empty(0, dtype=float)
+    values = bw.values(chrom, start, end, numpy=True)
+    return np.asarray(values, dtype=float)
+
+
+def background_signal(signals: dict, region_length: int):
+    """Background values sampled at the reference's deterministic positions."""
+    positions = background_positions(region_length)
+    return {cond: np.asarray(values, dtype=float)[positions]
+            for cond, values in signals.items()}
+
+
+def tfbs_bed_row(row, cond_names, motif_name: str, peak_id: str = "."):
+    """One row of the per-site BED, in the reference's column order.
+
+    ``chrom start end name score strand`` from the peak, then the per-condition
+    normalised scores, the bound flags, and the log2 fold changes -- matching the
+    order `process_tfbs` appends them in.
+    """
+    fields = [row.get("chrom", "."), str(row.get("start", 0)), str(row.get("end", 0)),
+              "{0}_{1}".format(motif_name, peak_id), ".", row.get("strand", "+")]
+    for cond in cond_names:
+        fields.append("{0:.3f}".format(float(row.get(cond + "_score", 0.0))))
+    for cond in cond_names:
+        fields.append(str(int(row.get(cond + "_bound", 0))))
+    for key in sorted(k for k in row if k.endswith("_log2fc")):
+        fields.append("{0:.3f}".format(float(row[key])))
+    return "\t".join(fields)
+
+
+def observed_statistics(rows, cond_names, comparison):
+    """Per-TF summary numbers used by the permutation test.
+
+    The reference reduces the per-site table to the mean score per condition and the
+    mean log2 fold change; those three numbers drive `log2fc_pvalue`. Returns plain
+    floats so the result can be written to the overview table as-is.
+    """
+    cond1, cond2 = comparison
+    base = "{0}_{1}".format(cond1, cond2)
+    stats = {}
+    for cond in cond_names:
+        vals = np.asarray([r.get(cond + "_score", np.nan) for r in rows], dtype=float)
+        finite = vals[np.isfinite(vals)]
+        stats[cond + "_mean_score"] = float(finite.mean()) if finite.size else float("nan")
+    fcs = np.asarray([r.get(base + "_log2fc", np.nan) for r in rows], dtype=float)
+    finite_fc = fcs[np.isfinite(fcs)]
+    stats[base + "_mean_log2fc"] = (float(finite_fc.mean())
+                                    if finite_fc.size else float("nan"))
+    stats["n_sites"] = int(len(rows))
+    return stats
