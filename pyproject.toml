@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "easyepi"
-version = "0.6.0"
+version = "0.7.0"
 description = "Easyepi: a unified bulk epigenomics downstream analysis suite (CUT&Tag / CUT&RUN / ChIP-seq / ATAC-seq / MNase-seq)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -43,6 +43,13 @@ bigwig = ["pyBigWig>=0.3.22"]
 viz = ["matplotlib>=3.7", "scikit-learn>=1.3"]
 # hmmlearn is only needed by `easyepi histone-states`.
 states = ["hmmlearn>=0.3"]
+# The built-in TOBIAS ports (`easyepi footprint --engine port`, and the
+# BINDetect/ATACorrect helpers) keep the reference implementation's own
+# dependencies instead of hiding them behind a pure-Python substitute:
+# scikit-learn for the GMM threshold, MOODS for the p-value scan.
+# Installed by the clean-venv release check: without this extra,
+# `tobias_bindetect_stats` raised ModuleNotFoundError on import.
+tobias = ["scikit-learn>=1.3", "mira-moods>=1.9"]
 # `easyepi/activity.py` handles both API generations: 1.9.x (`dc.run_ulm`) and
 # 2.x (`dc.mt.ulm`). decoupler 1.9.2 declares `Requires-Python <3.12` while 2.x
 # needs >=3.10, so one range covers every supported interpreter and the marker
@@ -73,6 +80,7 @@ all = [
     "anndata",
     "biopython>=1.81",
     "scikit-learn>=1.3",
+    "mira-moods>=1.9",
 ]
 
 [project.scripts]

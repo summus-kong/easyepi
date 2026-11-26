@@ -28,10 +28,23 @@ from __future__ import annotations
 import numpy as np
 import scipy.optimize
 import scipy.stats
-from sklearn.mixture import GaussianMixture
+
+try:  # scikit-learn supplies the GMM the reference uses for the threshold.
+    from sklearn.mixture import GaussianMixture
+except ImportError:  # pragma: no cover - exercised by the release check
+    GaussianMixture = None
 
 #: Reference caps the background filter at this percentile.
 BACKGROUND_PERCENTILE = 99
+
+
+def _require_sklearn():
+    """Fail with the install hint rather than a bare ImportError."""
+    if GaussianMixture is None:
+        raise ModuleNotFoundError(
+            "the TOBIAS BINDetect port needs scikit-learn for its GMM "
+            "threshold; install it with `pip install easyepi[tobias]`")
+
 
 #: Reference uses a 2-component mixture on log(scores): zeros vs signal.
 GMM_COMPONENTS = 2
@@ -60,6 +73,7 @@ def estimate_background_distribution(scores):
         raise ValueError("no background scores below the 99th percentile")
 
     log_vals = np.log(bg).reshape(-1, 1)
+    _require_sklearn()
     gmm = GaussianMixture(n_components=GMM_COMPONENTS, random_state=GMM_RANDOM_STATE)
     gmm.fit(log_vals)
 
