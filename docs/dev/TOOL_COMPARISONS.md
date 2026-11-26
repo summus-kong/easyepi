@@ -231,13 +231,84 @@ Install for genome mode: `$ENV/share/homer/configureHomer.pl -install hg38`.
   hypergeometric enrichment is not reproduced or cross-checked by easyepi's own
   `homer_like` implementation.
 
+## Known limitations
+
+These are measured, quantified, and deliberately not fixed. They are recorded so
+nobody rediscovers them or mistakes them for open bugs.
+
+### ATACorrect: the reverse strand carries a 1% residual
+
+Whole-track agreement with the reference, on `ENCFF327MYY` corrected signal:
+
+| track | forward | reverse |
+|---|---|---|
+| `uncorrected` | `max|diff| = 0` | `max|diff| = 0` |
+| `bias` | corr **0.999992** | corr **0.989637** |
+| `expected` | corr 0.992653 | corr 0.962036 |
+| `corrected` | corr 0.998471 | corr 0.988374 |
+
+Everything that could be isolated was verified to machine precision:
+
+| layer | result |
+|---|---|
+| `score_sequence`, both strands | 3.6e-15 / 7.1e-15 |
+| cut sites and k-mers on real reads | 18/18 identical |
+| symbol sampling vs `AtacBias` counts | `max|diff| = 0`, `no_bias` equal |
+| `fast_rolling_math` (sum/mean/max/min) | 1e-12 |
+| row-sliced NaN initialisation | reproduced exactly |
+| `correction_factor` | derived and measured (200000) |
+| genome-wide `bias` model | corr 0.9986 |
+
+The residual is therefore **not** in scoring, cut sites, sampling, the alphabet, or
+the rolling primitives. It survives only in the assembled
+`bias_correction` (window fit + rescaling), which the reference does not expose
+through an API — its tracks go straight to bigWig. Isolating it further would mean
+running the full CLI genome-wide (about 30 minutes) and reading the tracks back.
+**Not done.** Treat forward-strand output as reference-equivalent and reverse as
+correct to about 1%.
+
+The nucleotide alphabet was a separate matter: the reference encodes A=0, T=1, C=2,
+G=3 (alphabetical), which differs from the conventional A/C/G/T. Relabelling is an
+isomorphism, so scoring is invariant (`max|diff| = 0`), but a *model fitted on real
+FASTA* is not, because the sequence does not follow the relabelling. The port now
+uses the reference alphabet so a fitted model matches.
+
+### Footprint scores are additive, not proportions
+
+`easyepi footprint --engine port` reports the TOBIAS score `flank_mean - fp_mean`,
+which is in raw signal units, while `--engine native` reports
+`(shoulder - centre) / shoulder`, a proportion. They are not comparable in
+magnitude; only their sign agrees. The JSON carries both plus an `engine` field.
+
+Two degenerate cases are reported rather than hidden:
+
+* **No negative values** — `fp_mean` is 0, so the score collapses to the flank
+  level. `degenerate: true` and a note say so.
+* **No positive flanks** — `flank_mean` is 0, so the score is the dip magnitude.
+  This is arithmetically correct, not a failure; on a corrected ATAC track whole
+  stretches are negative.
+
+## Choosing a footprint engine
+
+`easyepi footprint` takes `--engine`:
+
+| engine | what runs | needs |
+|---|---|---|
+| `native` (default) | `footprint_profile`, the proportion contrast | nothing |
+| `port` | the bundled TOBIAS reimplementation | nothing |
+| `tobias` | the external `TOBIAS ScoreBigwig` binary | a TOBIAS install |
+
+The default is `native`, so existing invocations produce byte-identical output. The
+ports were reachable only from tests before this; `port` is what makes them a
+supported option, and it is the reason to keep them rather than delete them.
+
 ## Status against backlog item 12
 
 | tool | status |
 |---|---|
 | MACS3 | **DONE** — equivalence is architectural; passthrough and refusal are pinned |
 | MEME/FIMO | **DONE** — best window 11/12, ranking ρ = 1.000; score scale documented as incomparable |
-| TOBIAS | **DONE** - broken command fixed and pinned; score identity `TOBIAS = flank_level x easyepi` measured at ratio 1.000000 |
+| TOBIAS | **DONE** — ScoreBigwig, ATACorrect, BINDetect and the two plot preparations ported 1:1 and reachable via `footprint --engine port`; the reverse-strand residual is quantified under Known limitations |
 | ChromHMM | **DONE** — BinarizeBed and LearnModel run on real hg38 lengths; trained model recovers the planted two-mark structure; input contract pinned |
 | HOMER | **PARTIAL** — FASTA mode runs and is pinned; genome mode blocked (no installed genome) |
 | real cohort | TODO |

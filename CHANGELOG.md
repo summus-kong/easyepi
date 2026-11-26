@@ -379,6 +379,21 @@
   `figure_formats` for `None` instead of testing the resolved list, so it did
   nothing whenever that list was non-empty.
 
+### Added
+
+- **`easyepi footprint --engine {native,port,tobias}`.** The TOBIAS
+  reimplementations were reachable only from tests, which made them dead code.
+  `port` runs the bundled ScoreBigwig port with no TOBIAS installed; `tobias`
+  drives the external binary; `native` stays the default so existing invocations
+  are unchanged. The JSON now records `engine` and, for `port`/`tobias`, a
+  `tobias_engine` block with the additive score, the window bounds actually used,
+  and a `degenerate` flag for the two cases where the score is well-defined but
+  uninformative (no negatives, or no positive flanks).
+- `docs/dev/TOOL_COMPARISONS.md` now has a **Known limitations** section recording
+  the ATACorrect reverse-strand residual (forward 0.999992, reverse 0.989637) with
+  the full list of layers verified to machine precision, so the gap is not mistaken
+  for an untested path.
+
 ### Fixed (signal tracks, DMR model statements)
 
 - **`bam2bigwig` normalisation and duplicate handling were implicit.** Three

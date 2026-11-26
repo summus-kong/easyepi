@@ -211,6 +211,7 @@ def _cmd_footprint(args):
     from easyepi.footprint import (extract_profiles, fig_footprint,
                                    footprint_profile, footprint_significance,
                                    local_signal, read_site_bed)
+    from easyepi.footprint_engines import tobias_port_score, tobias_binary_score
     from easyepi._plots import selected_formats
     import os, json
 
@@ -236,6 +237,25 @@ def _cmd_footprint(args):
     prof = footprint_profile(signal, target_idx,
                              flank=args.flank, background_sites=bg_idx)
 
+    # The TOBIAS-style score is reported next to the native one so the two are
+    # comparable from a single JSON file. `native` computes it too (it is cheap)
+    # but only `port`/`tobias` make it the headline result.
+    engine = getattr(args, "engine", "native")
+    port_score = None
+    if engine in ("port", "tobias"):
+        try:
+            if engine == "port":
+                port_score = tobias_port_score(signal, target_idx, args.flank)
+            else:
+                port_score = tobias_binary_score(args.bigwig, args.target,
+                                                 args.chrom, args.start,
+                                                 args.end)
+        except (ImportError, OSError, ValueError) as exc:
+            raise SystemExit(
+                f"[easyepi] footprint --engine {engine} unavailable: {exc}\n"
+                "          install TOBIAS for --engine tobias, or use "
+                "--engine native") from exc
+
     # Per-locus shoulder-vs-centre contrast, tested against the background set.
     target_mat = extract_profiles(signal, target_idx, 0, args.flank)
     bg_mat = extract_profiles(signal, bg_idx, 0, args.flank) if bg_idx else None
@@ -244,12 +264,15 @@ def _cmd_footprint(args):
     os.makedirs(args.out, exist_ok=True)
     res_path = os.path.join(args.out, "footprint.json")
     with open(res_path, "w", encoding="utf-8") as fh:
-        json.dump({"score": prof["score"], "n_sites": prof["n_sites"],
+        payload = {"score": prof["score"], "n_sites": prof["n_sites"],
                    "chrom": chrom, "start": start, "end": end, "flank": args.flank,
+                   "engine": engine,
                    "target_profile": prof["target_profile"].tolist(),
                    "background_profile": prof["background_profile"].tolist(),
-                   "significance": {k: v for k, v in sig.items() if k != "target_dips"}},
-                  fh, indent=2)
+                   "significance": {k: v for k, v in sig.items() if k != "target_dips"}}
+        if port_score is not None:
+            payload["tobias_engine"] = port_score
+        json.dump(payload, fh, indent=2)
 
     p_mw = sig.get("p_mannwhitney")
     p_w = sig.get("p_wilcoxon")
@@ -270,6 +293,12 @@ def _cmd_footprint(args):
     if p_w is not None and p_w == p_w:
         print(f"[easyepi] centre-vs-shoulder (greater) Wilcoxon p={p_w:.3e} "
               f"(a dip is positive; negative scores mean the centre is a peak)")
+    if port_score is not None:
+        print(f"[easyepi] TOBIAS-style footprint score={port_score['score']:.4f} "
+              f"({port_score['n_sites']} sites, engine={engine})")
+        if port_score.get("degenerate"):
+            print("[easyepi] note: signal has no negative values, so the TOBIAS "
+                  "score equals the flank level by definition")
     print(f"[easyepi] wrote {res_path}")
     return 0
 
@@ -724,6 +753,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_fp.add_argument("--title", default="TF footprint",
                        help="figure title (default \"TF footprint\"); set it per comparison so published panels are distinguishable")
     p_fp.add_argument("--out", required=True, help="directory to write the run outputs into; created if absent, and a status.json recording the resolved inputs lands at its root")
+    p_fp.add_argument("--engine", choices=("native", "port", "tobias"), default="native",
+                      help="footprint scorer: native (default, proportion contrast), port (bundled TOBIAS reimplementation, no TOBIAS needed), or tobias (external binary)")
     add_figure_args(p_fp)
     p_fp.set_defaults(func=_cmd_footprint)
 
