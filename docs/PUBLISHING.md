@@ -8,6 +8,11 @@ This project has not been uploaded or published by the refactor. Build/install c
 2. Check author/project URLs, version and citation metadata. Unverified repository/documentation URLs were removed; add confirmed public URLs only.
 3. Install the intended extras in a clean Python >=3.11 environment and run the full test suite.
 4. Run each independent module's help; import from outside the source checkout to detect shadowing.
+   `scripts/verify_installed.py` does this against an installed wheel: it refuses to run
+   from inside the checkout (where the answer is meaningless), then checks every
+   subcommand's `--help`, that no legacy module shipped, and that all 135 modules import.
+   Point it at any interpreter that has the wheel installed and run it from another
+   directory, for example `cd /tmp && <venv>/bin/python <repo>/scripts/verify_installed.py`.
 5. Build from a clean source snapshot and inspect wheel/sdist contents: no R files, legacy python nesting, cached analyses, datasets, private paths or old package modules.
 6. Run real MACS3/ChromHMM/MEME and BAM/BigWig examples on a supported Linux environment, recording tool/reference versions and expected results.
 7. Complete biological and performance benchmarks before claiming method equivalence, runtime improvements or publication readiness.
