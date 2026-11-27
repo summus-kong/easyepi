@@ -117,7 +117,8 @@ Ordered as the chain runs, because a later step inherits an earlier step's null.
 | Metric | (a) do target and background GC and length distributions agree? (b) is every matched control inside the tolerance the report claims? (c) how much does a downstream ranking move between background designs? |
 | Threshold | (a) KS p > 0.01 on both GC and length; (b) zero controls outside tolerance, verified by independent recomputation; (c) reported, not thresholded |
 | Covered | `tests/test_gc_background.py` — 23 tests including a control recomputed against its own interval GC; `tests/test_background_report.py` — 11 tests |
-| Not covered | **accessibility-matched backgrounds.** A composition-matched genomic background is not the null an ATAC enrichment needs. This is the single most important gap in the chain. |
+| Not covered | the sensitivity comparison **across** background designs — the accessibility arm exists but its effect on a downstream ranking has not been measured |
+| Accessibility | `--accessible BED` restricts controls to a supplied universe; a control must lie wholly inside one merged interval. A universe that wholly contains the targets is refused as circular. Measured on 300 real peaks: 297/300 matched, and the circular case exits 1 |
 | Measured | 300 real H3K27ac peaks, chr1, 1000 bp grid: target GC 0.520 vs background 0.513, KS p = 0.563; 100% matched after the interval-GC fix; 2.5 s for 1.245M windows |
 
 Two failures this section already caught, recorded because they are the class of

@@ -18,7 +18,9 @@ from typing import Sequence
 import numpy as np
 
 from easyepi.background_report import background_report
-from easyepi.gc_background import genome_windows, match_background, write_bed
+from easyepi.gc_background import (accessible_fraction, genome_windows,
+                                   match_background, read_accessible_bed,
+                                   write_bed)
 
 
 def _read_bed(path: str | Path) -> list[tuple[str, int, int]]:
@@ -91,6 +93,8 @@ def run_background(args) -> int:
 
     targets = _read_bed(args.peaks)
     exclude = _read_bed(args.exclude) if getattr(args, "exclude", None) else None
+    accessible = (read_accessible_bed(args.accessible)
+                  if getattr(args, "accessible", None) else None)
     chromosomes = None
     if getattr(args, "chromosomes", None):
         chromosomes = [c.strip() for c in args.chromosomes.split(",") if c.strip()]
@@ -107,6 +111,7 @@ def run_background(args) -> int:
             same_chrom=not getattr(args, "any_chrom", False),
             seed=int(args.seed),
             exclude=exclude,
+            accessible=accessible,
         )
 
         # Only measure GC on sequences when something was matched; otherwise the
@@ -121,6 +126,36 @@ def run_background(args) -> int:
             target_seqs=target_seqs, control_seqs=control_seqs,
             match_summary=match_summary,
         )
+        # The design has to travel with the result: a reader cannot otherwise tell
+        # an accessibility-matched background from a composition-matched one, and
+        # the two support different conclusions.
+        report["background_design"] = match_summary["background_design"]
+        if accessible is not None:
+            # Per chromosome, because a multi-chromosome run has a different
+            # coverage on each and a single number would hide the empty ones.
+            chroms = sorted({t[0] for t in targets})
+            coverage = {c: round(accessible_fraction(c, targets, accessible), 4)
+                        for c in chroms}
+            report["accessible"] = {
+                "bed": str(args.accessible),
+                "intervals_note": "overlapping accessible intervals merged on load",
+                # This is the fraction of TARGETS that lie wholly inside the
+                # universe, which answers "how much of the signal is in the
+                # accessible set", not "did matching work". It can be near zero
+                # while every control is accessible, when the universe's intervals
+                # are shorter than the peaks -- a control only has to fit inside an
+                # interval, a target of the same width does not.
+                "target_fraction_wholly_inside_universe_per_chrom": coverage,
+                "target_fraction_wholly_inside_universe_overall": round(
+                    sum(accessible_fraction(c, targets, accessible) *
+                        sum(1 for t in targets if t[0] == c) for c in chroms)
+                    / len(targets), 4) if targets else 0.0,
+                "what_this_number_means":
+                    "fraction of target REGIONS wholly contained in the accessible "
+                    "universe; it measures how much signal lies in accessible "
+                    "sequence, not whether controls were drawn from it. Controls "
+                    "are always drawn from the universe when this field is present.",
+            }
         report["params"] = {
             "peaks": str(args.peaks),
             "genome_fasta": str(args.genome_fasta),
@@ -130,6 +165,7 @@ def run_background(args) -> int:
             "same_chrom": not getattr(args, "any_chrom", False),
             "seed": int(args.seed),
             "exclude": str(args.exclude) if getattr(args, "exclude", None) else None,
+            "accessible": str(args.accessible) if getattr(args, "accessible", None) else None,
         }
 
         write_bed(controls, out_path)
@@ -148,6 +184,11 @@ def run_background(args) -> int:
         ln = report["distributions"]["length"]
         print("[easyepi] len  target median %s / background median %s" % (
             ln["target"]["median"], ln["background"]["median"]))
+        print("[easyepi] background design: %s" % match_summary["background_design"])
+        if accessible is not None:
+            print("[easyepi] accessible universe: %d interval(s) on %d chromosome(s); "
+                  "every control lies wholly inside it"
+                  % (sum(len(v) for v in accessible.values()), len(accessible)))
         print("[easyepi] matched %d/%d targets (%.0f%%)" % (
             match_summary["n_matched"], match_summary["n_targets"],
             100 * match_summary["frac_matched"]))

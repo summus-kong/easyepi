@@ -158,31 +158,33 @@ step has different evidence needs and none substitutes for another.
 
 ### 3.1 Input and background preparation
 
-- **Priority** P0 · **Status** PARTIAL
-- **Problem** `easyepi background` now produces GC- and length-matched controls and
-  reports both distributions, a KS test on each, the matched fraction and the seed.
-  Accessibility is **not** matched: for ATAC data a composition-matched genomic
-  background is not the same null as an accessibility-matched one.
-- **Approach** Add an accessibility-aware mode. Two candidate designs, and the
-  choice is still open:
-  1. shift-and-match — take each target, shift it within the same chromosome, keep
-     it only if it lands in an accessible region (a supplied BED or a peak set);
-  2. accessible-universe sampling — sample from the supplied accessible BED
-     directly, then match on GC and length.
-  Design 2 needs only a BED the user already has; design 1 needs a way to define
-  "accessible" that is independent of the targets, which is the hard part.
-- **Depends on** a decision from the user on which design, or on what accessible
-  input is available in their data.
-- **Done when** The report states which background construction was used, carries
-  target and background GC, length *and* accessibility distributions, and a
-  sensitivity comparison between matched and unmatched backgrounds is in
-  [VALIDATION_PLAN.md](VALIDATION_PLAN.md) §3.1.
-- **Test data** Real ATAC peak sets where an independent accessibility call exists.
+- **Priority** P0 · **Status** PARTIAL (accessibility-matched mode DONE; the
+  sensitivity comparison is not)
+- **Problem** `easyepi background` produced GC- and length-matched controls only.
+  For ATAC data a composition-matched genomic background is not the same null as
+  an accessibility-matched one: it compares peaks against mostly-inaccessible
+  sequence, which no plausible motif enrichment can be read against.
+- **Approach** Accessible-universe sampling was chosen over shift-and-match.
+  Shift-and-match needs an accessibility definition independent of the targets —
+  the hard part — and a shifted control shares the target's local chromatin
+  neighbourhood, so it is not independent. `--accessible BED` now restricts
+  controls to a supplied universe; a control must lie **wholly** inside one merged
+  accessible interval, and GC and length matching still apply.
+- **Done when** (a) the report names the construction — DONE; (b) a target set
+  whose universe already covers it is refused as circular — DONE; (c) the
+  sensitivity comparison between unmatched, matched and accessibility-matched
+  backgrounds is reported — **not done**.
+- **Test data** 300 real H3K27ac peaks on chr1 against an independent 2000-interval
+  accessible set: 297/300 matched, GC 0.520 vs 0.508 (KS p = 0.248), and the
+  circular configuration (`--accessible` = the peaks) is refused with exit 1.
 - **Risk** An accessibility background built from the same peaks it controls for is
-  circular. Any implementation must refuse, or clearly flag, that configuration.
-- **Note** This is the highest-value item in the motif chain: an enrichment p-value
-  computed against a mismatched null is not interpretable, and everything
-  downstream inherits the error.
+  circular. The implementation refuses a universe that wholly contains every
+  target, but a universe that merely *overlaps* the targets heavily is still
+  partly circular and is not detected. The report prints the target fraction
+  inside the universe so a reader can judge.
+- **Remaining note** This was the highest-value item in the motif chain. What is
+  left is not the construction but the evidence that the construction changes a
+  ranking — see [VALIDATION_PLAN.md](VALIDATION_PLAN.md) §3.3.
 
 ### 3.2 Site-level known-motif scanning
 

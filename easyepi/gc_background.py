@@ -177,28 +177,119 @@ def _interval_gc(prefix: np.ndarray, starts: np.ndarray, ends: np.ndarray,
     return (weighted / total) if total else None
 
 
+def read_accessible_bed(path: str | Path
+                        ) -> dict[str, np.ndarray]:
+    """Read an accessible-region BED into per-chromosome sorted intervals.
+
+    Accepts BED3+ and skips track/browser/comment lines. Overlapping intervals are
+    merged, because a window inside two overlapping accessible regions is simply
+    accessible, and leaving them separate would make the containment test depend
+    on which interval happened to be found first.
+    """
+    raw: dict[str, list[tuple[int, int]]] = {}
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith(("#", "track", "browser")):
+                continue
+            fields = line.split("\t")
+            if len(fields) < 3:
+                continue
+            try:
+                start, end = int(fields[1]), int(fields[2])
+            except ValueError:
+                continue
+            if end > start:
+                raw.setdefault(fields[0], []).append((start, end))
+    if not raw:
+        raise ValueError(f"no accessible regions read from {path}")
+
+    merged: dict[str, np.ndarray] = {}
+    for chrom, pairs in raw.items():
+        pairs.sort()
+        out: list[tuple[int, int]] = []
+        for start, end in pairs:
+            if out and start <= out[-1][1]:
+                out[-1] = (out[-1][0], max(out[-1][1], end))
+            else:
+                out.append((start, end))
+        merged[chrom] = np.asarray(out, dtype=np.int64)
+    return merged
+
+
+def _contained(chrom: str, start: int, end: int,
+               accessible: dict[str, np.ndarray]) -> bool:
+    """True when ``[start, end)`` lies wholly inside one accessible interval."""
+    intervals = accessible.get(chrom)
+    if intervals is None or intervals.size == 0:
+        return False
+    idx = int(np.searchsorted(intervals[:, 0], start, side="right")) - 1
+    if idx < 0:
+        return False
+    return int(intervals[idx, 1]) >= end
+
+
+def accessible_fraction(chrom: str, regions: Sequence[tuple[str, int, int]],
+                        accessible: dict[str, np.ndarray]) -> float:
+    """Fraction of ``regions`` that lie wholly inside the accessible universe.
+
+    Reported so a reader can see how restrictive the accessible set was: a
+    universe that contains 15% of the genome and 95% of the targets is not an
+    accessibility match, it is a restatement of the targets.
+    """
+    subset = [(s, e) for c, s, e in regions if c == chrom]
+    if not subset:
+        return 0.0
+    hits = sum(1 for s, e in subset if _contained(chrom, int(s), int(e), accessible))
+    return hits / len(subset)
+
+
 def match_background(targets: Sequence[tuple[str, int, int]],
                      windows: dict[str, list[tuple[int, int, float]]],
                      tolerance: float = 0.05, min_distance: int = 2000,
                      same_chrom: bool = True, seed: int = 0,
                      exclude: Sequence[tuple[str, int, int]] | None = None,
+                     accessible: dict[str, np.ndarray] | None = None,
                      max_tries_per_target: int = 200
                      ) -> tuple[list[tuple[str, int, int]], dict[str, Any]]:
-    """Pick one GC- and width-matched control window per target region.
+    """Pick one GC- and width-matched control interval per target region.
 
     ``tolerance`` is the allowed absolute difference in GC fraction. Candidates
     must lie at least ``min_distance`` bp from every target (and every entry of
     ``exclude``) so a control cannot silently overlap the signal it controls for.
     Each candidate is used at most once.
 
+    ``accessible`` restricts controls to a supplied accessible universe (see
+    :func:`read_accessible_bed`). This is the difference between a
+    composition-matched null and an accessibility-matched one: for ATAC data,
+    sampling from the whole genome compares peaks against mostly-inaccessible
+    sequence, which no plausible motif enrichment can be read against. When
+    supplied, every control lies wholly inside an accessible interval.
+
     Returns ``(controls, summary)``. Unmatched targets are reported rather than
     silently dropped, because a control set that quietly loses half the hard cases
-    biases the comparison.
+    biases the comparison. ``summary["background_design"]`` names the construction
+    so a downstream report cannot confuse the two.
     """
     if not (0.0 < tolerance < 1.0):
         raise ValueError("tolerance must be in (0, 1)")
     if min_distance < 0:
         raise ValueError("min_distance must be non-negative")
+
+    # A background drawn from the targets it controls for is circular, and a
+    # p-value computed against it is meaningless. The check is on coverage rather
+    # than on file identity, because an accessible set that merely contains every
+    # peak is equally circular whatever it was named.
+    if accessible is not None:
+        covered = [accessible_fraction(c, targets, accessible) for c in
+                   {t[0] for t in targets}]
+        if covered and min(covered) >= 0.99:
+            raise ValueError(
+                "the accessible universe contains every target region, so a "
+                "control drawn from it would come from the peaks being tested. "
+                "Supply an accessibility call that is independent of these "
+                "targets, or omit --accessible to use a composition-matched "
+                "background and report it as such.")
 
     rng = np.random.default_rng(seed)
     by_chrom_cache: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
@@ -219,8 +310,16 @@ def match_background(targets: Sequence[tuple[str, int, int]],
         widths = arr[:, 1] - arr[:, 0]
         prefix[chrom] = np.concatenate(([0.0], np.cumsum(arr[:, 2] * widths)))
         buckets: dict[int, list[int]] = {}
-        for i, b in enumerate(np.clip(arr[:, 2] / _GC_RESOLUTION, 0,
-                                      _GC_BUCKETS - 1).astype(np.int64)):
+        bucket_ids = np.clip(arr[:, 2] / _GC_RESOLUTION, 0,
+                             _GC_BUCKETS - 1).astype(np.int64)
+        for i, b in enumerate(bucket_ids):
+            # When an accessible universe is given, only windows starting inside
+            # it enter the index at all. Full containment of the control interval
+            # is still verified per draw: a window can start in an accessible
+            # region and the control can still run past its end.
+            if accessible is not None and not _contained(
+                    chrom, int(arr[i, 0]), int(arr[i, 0]) + 1, accessible):
+                continue
             buckets.setdefault(int(b), []).append(i)
         gc_buckets[chrom] = {b: np.asarray(v, dtype=np.int64)
                              for b, v in buckets.items()}
@@ -317,6 +416,9 @@ def match_background(targets: Sequence[tuple[str, int, int]],
             ce_c = cs_c + width
             if ce_c > chrom_end_cache.get(chrom, ce_c):
                 continue
+            if accessible is not None and not _contained(chrom, cs_c, ce_c,
+                                                         accessible):
+                continue
             span_gc = _interval_gc(pref, starts, ends, gcs, cs_c, ce_c)
             if span_gc is None or abs(span_gc - want_gc) > tolerance:
                 continue
@@ -356,6 +458,9 @@ def match_background(targets: Sequence[tuple[str, int, int]],
         controls.append(control)
 
     summary = {
+        "background_design": ("accessible, GC- and length-matched" if accessible
+                              is not None else "GC- and length-matched"),
+        "accessible_universe_supplied": accessible is not None,
         "n_targets": len(targets),
         "n_matched": len(controls),
         "n_unmatched": len(unmatched),

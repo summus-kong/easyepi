@@ -6,8 +6,9 @@ import time
 import numpy as np
 import pytest
 
-from easyepi.gc_background import (gc_fraction, genome_windows, iter_fasta,
-                                   match_background, write_bed)
+from easyepi.gc_background import (_contained, accessible_fraction, gc_fraction,
+                                   genome_windows, iter_fasta, match_background,
+                                   read_accessible_bed, write_bed)
 
 
 def _fa(tmp_path, name, records):
@@ -312,3 +313,98 @@ def test_control_width_always_equals_a_target_width():
     widths = {te - ts for _c, ts, te in targets}
     for _c, cs, ce in controls:
         assert (ce - cs) in widths, f"{ce - cs} is not any target width {widths}"
+
+# --------------------------------------------------------------------------
+# Accessibility-matched background (design 2: sample the accessible universe)
+# --------------------------------------------------------------------------
+def _uniform_grid(n=50, gc=0.5):
+    return {"chr1": [(i * 200, i * 200 + 200, gc) for i in range(n)]}
+
+
+def test_read_accessible_bed_merges_overlaps(tmp_path):
+    bed = tmp_path / "acc.bed"
+    bed.write_text("track name=acc\nchr1\t0\t500\nchr1\t400\t900\nchr1\t2000\t2200\n",
+                   encoding="utf-8")
+    got = read_accessible_bed(bed)
+    assert got["chr1"].tolist() == [[0, 900], [2000, 2200]]
+
+
+def test_read_accessible_bed_rejects_an_empty_file(tmp_path):
+    bed = tmp_path / "e.bed"
+    bed.write_text("track name=x\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="no accessible regions"):
+        read_accessible_bed(bed)
+
+
+def test_contained_requires_the_whole_interval(tmp_path):
+    """A control that starts inside but runs past the end is not accessible."""
+    accessible = {"chr1": np.array([[5000, 10000]])}
+    assert _contained("chr1", 5000, 5400, accessible)
+    assert not _contained("chr1", 4900, 5300, accessible)   # crosses the start
+    assert not _contained("chr1", 9800, 10400, accessible)  # crosses the end
+    assert not _contained("chr1", 100, 500, accessible)
+    assert not _contained("chrX", 5000, 5400, accessible)   # absent chromosome
+
+
+def test_controls_are_restricted_to_the_accessible_universe():
+    windows = _uniform_grid()
+    accessible = {"chr1": np.array([[5000, 10000]])}
+    targets = [("chr1", 0, 400), ("chr1", 1000, 1400)]
+
+    controls, summary = match_background(targets, windows, tolerance=0.05,
+                                         min_distance=0, seed=0,
+                                         accessible=accessible)
+    assert summary["n_matched"] == 2
+    assert summary["accessible_universe_supplied"] is True
+    assert summary["background_design"].startswith("accessible")
+    for _c, s, e in controls:
+        assert _contained("chr1", s, e, accessible), (s, e)
+
+
+def test_without_an_universe_the_design_is_named_differently():
+    controls, summary = match_background([("chr1", 0, 400)], _uniform_grid(),
+                                         tolerance=0.05, min_distance=0, seed=0)
+    assert summary["accessible_universe_supplied"] is False
+    assert summary["background_design"] == "GC- and length-matched"
+
+
+def test_a_universe_containing_every_target_is_refused_as_circular():
+    """The p-value would be computed against the peaks being tested."""
+    windows = _uniform_grid()
+    targets = [("chr1", 0, 600), ("chr1", 200, 800)]
+    circular = {"chr1": np.array([[0, 1000]])}
+    with pytest.raises(ValueError, match="circular|contains every target"):
+        match_background(targets, windows, tolerance=0.05, min_distance=0,
+                         seed=0, accessible=circular)
+
+
+def test_accessible_fraction_counts_only_fully_contained_targets():
+    accessible = {"chr1": np.array([[0, 1000]])}
+    targets = [("chr1", 0, 500), ("chr1", 800, 1200), ("chr2", 0, 100)]
+    # chr1: one fully inside, one crossing the end; chr2 absent entirely
+    assert accessible_fraction("chr1", targets, accessible) == 0.5
+    assert accessible_fraction("chr2", targets, accessible) == 0.0
+
+
+def test_report_drops_accessibility_from_not_matched_when_it_was_matched():
+    """Claiming accessibility was unmatched after matching it would be false."""
+    from easyepi.background_report import background_report
+
+    summary = {"background_design": "accessible, GC- and length-matched",
+               "accessible_universe_supplied": True,
+               "n_matched": 5, "n_unmatched": 0, "frac_matched": 1.0,
+               "tolerance": 0.05, "min_distance": 0}
+    rep = background_report([("chr1", 0, 100)], [("chr1", 500, 600)],
+                            match_summary=summary)
+    assert "accessibility" not in rep["not_matched"]
+    assert "accessibility" in rep["matched_on"]
+    assert rep["composition_matched_only"] is False
+
+    plain = {"background_design": "GC- and length-matched",
+             "accessible_universe_supplied": False,
+             "n_matched": 5, "n_unmatched": 0, "frac_matched": 1.0,
+             "tolerance": 0.05, "min_distance": 0}
+    rep2 = background_report([("chr1", 0, 100)], [("chr1", 500, 600)],
+                             match_summary=plain)
+    assert "accessibility" in rep2["not_matched"]
+    assert rep2["composition_matched_only"] is True

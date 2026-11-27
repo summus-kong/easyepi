@@ -764,6 +764,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_bg.add_argument("--exclude", default=None,
                       help="BED of regions that can never be controls, e.g. an "
                            "ENCODE blacklist")
+    p_bg.add_argument("--accessible", default=None,
+                      help="BED of accessible regions (e.g. a union peak set) to "
+                           "restrict controls to. For ATAC data a genome-wide "
+                           "background compares peaks against mostly-"
+                           "inaccessible sequence; this makes the null an "
+                           "accessibility-matched one. Every control is required "
+                           "to lie wholly inside an accessible interval, and a "
+                           "universe that already contains every target is "
+                           "refused as circular")
     p_bg.add_argument("--any-chrom", action="store_true",
                       help="allow controls from a different chromosome; the "
                            "default keeps them on the same chromosome")

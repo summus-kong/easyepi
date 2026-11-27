@@ -106,13 +106,26 @@ def background_report(targets: Sequence[tuple[str, int, int]],
     """
     from easyepi.gc_background import gc_fraction
 
+    # Whether accessibility was matched decides what the remaining list may say.
+    # Reporting "accessibility" as unmatched after restricting controls to an
+    # accessible universe would be false, and reporting it as matched when no
+    # universe was supplied would be worse.
+    accessible_supplied = bool((match_summary or {}).get("accessible_universe_supplied"))
+    design = (match_summary or {}).get("background_design",
+                                       "GC- and length-matched")
+
     out: dict[str, Any] = {
-        "matched_on": list(matched_on),
+        "background_design": design,
+        "matched_on": list(matched_on) + (["accessibility"] if accessible_supplied else []),
         "n_target": len(targets),
         "n_control": len(controls),
-        "composition_matched_only": True,
-        "not_matched": ["mappability", "repeat content", "chromatin state",
-                        "accessibility", "expression"],
+        "composition_matched_only": not accessible_supplied,
+        "not_matched": [
+            item for item in
+            ["mappability", "repeat content", "chromatin state",
+             "accessibility", "expression"]
+            if not (item == "accessibility" and accessible_supplied)
+        ],
     }
 
     if target_seqs is not None and control_seqs is not None:
