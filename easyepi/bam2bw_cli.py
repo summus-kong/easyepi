@@ -19,7 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Sequence
 
-from easyepi.assays import CANONICAL_ASSAYS, canonical_assay
+from easyepi.assays import CANONICAL_ASSAYS, canonical_assay, describe_assay
 
 #: Sensible defaults per assay, keyed by the canonical label from
 #: :mod:`easyepi.assays`. Printed by the command and recorded in the metadata,
@@ -50,8 +50,9 @@ ASSAY_DEFAULTS: dict[str, dict[str, Any]] = {
 #: alike), so the distinction has to be made here rather than inherited.
 _CUTSITE_BIN_SIZE = 10
 
-#: Assays whose signal is a Tn5 insertion site and therefore takes the +4/-5
-#: strand shift. CUT&RUN is deliberately absent: see the note above.
+#: Kept as a name other code may import, but no longer the decision: the signal
+#: model lives in `easyepi.assays` now, so a caller cannot lose the shift by
+#: normalising the assay first. See `assays.SIGNAL_OVERRIDES`.
 _TN5_SHIFT_ASSAYS = frozenset({"cuttag"})
 
 
@@ -72,8 +73,14 @@ def _is_cutsite_assay(assay: str) -> bool:
 
     Both CUT&Tag and CUT&RUN qualify for a fine bin. This only decides the bin
     size; the strand shift is decided by :func:`_uses_tn5_shift`.
+
+    Resolves the assay rather than matching its spelling, so the answer cannot
+    drift from `assays.py`. Note that this still depends on `assay` carrying a
+    non-group spelling: `_is_cutsite_assay("chip")` is False, because a bare group
+    label genuinely does not say whether the signal is a cut site.
     """
-    return _assay_flat(assay) in {"cuttag", "cutrun"}
+    from easyepi.assays import describe_assay
+    return describe_assay(assay).is_cutsite
 
 
 def _uses_tn5_shift(assay: str) -> bool:
@@ -81,8 +88,15 @@ def _uses_tn5_shift(assay: str) -> bool:
 
     True for CUT&Tag, false for CUT&RUN: MNase has no Tn5 footprint to correct,
     so shifting a CUT&RUN library moves its cut sites off the truth.
+
+    Delegates to the shared vocabulary. This used to match the raw spelling here,
+    which meant `_uses_tn5_shift(canonical_assay("cuttag"))` returned False -- the
+    shift silently disappeared for any caller that normalised first. Callers that
+    need both the group and the signal must use `resolve_assay` once and read both
+    fields from it, rather than round-tripping through `canonical_assay`.
     """
-    return _assay_flat(assay) in _TN5_SHIFT_ASSAYS
+    from easyepi.assays import describe_assay
+    return describe_assay(assay).uses_tn5_shift
 
 ASSAY_CHOICES = CANONICAL_ASSAYS
 
@@ -100,9 +114,11 @@ def resolve_defaults(assay: str | None) -> dict[str, Any]:
     # The vocabulary lives in easyepi.assays, so `cuttag`, `cut-tag`, `cut&tag`
     # and every other accepted spelling resolve to one of the five keys here.
     # AssayError is a ValueError, which is what callers of this function catch.
-    key = canonical_assay(assay)
-    defaults = dict(ASSAY_DEFAULTS[key])
-    if _is_cutsite_assay(assay):
+    # Resolve once: the group picks the table, the signal class picks the shift.
+    # Resolving twice from a round-tripped group label is what lost the Tn5 offset.
+    resolved = describe_assay(assay)
+    defaults = dict(ASSAY_DEFAULTS[resolved.group])
+    if resolved.is_cutsite:
         # A cut-site assay wants fine bins. The shift is decided separately: only
         # a Tn5-based library has the +4/-5 footprint to correct.
         defaults["bin_size"] = _CUTSITE_BIN_SIZE

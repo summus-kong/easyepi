@@ -228,3 +228,79 @@ python maintenance/verify_linux.py
 External backends need separate integration checks on real data. Keep environment and method validation separate; do not interpret a green unit suite as proof of scientific validity. See RELIABILITY.md and REFERENCES.md.
 
 Linux verification is implemented in `maintenance/verify_linux.py` and `.github/workflows/linux.yml`. Optional-reader tests use synthetic real BAM/BigWig files when their extras are installed; ULM tests call the real decoupler implementation. The available host has no running Linux environment, so CI execution is pending. The PowerShell cleanup helper is for removing pre-existing artifacts on the current development host only; it is not part of the Linux analysis runtime.
+
+## Package layers
+
+The tree separates three things that are easy to conflate: shared mechanics, an
+analysis entry point, and a processing rule.
+
+| Layer | Holds | Rule for what goes here |
+| --- | --- | --- |
+| `easyepi/core/` | statistics, models, logging, provenance, interval and sequence primitives | no assay knowledge; reusable by any analysis |
+| `easyepi/<topic>/` | `peaks/`, `annotate/`, `normalize/`, `differential/`, `motifs/`, `qc/`, `nucleosome/`, `viz/` | an analysis topic with its own commands |
+| `easyepi/specific/<method>/` | `atac/`, `chip/`, `histone/`, `methylation/`, `mnase/` | steps whose defaults, inputs or interpretation are method-specific |
+| `easyepi/universal/` | entry points independent of the sequencing method | same input meaning and same computation for every assay |
+
+Reuse is decided by **whether the input means the same thing and the computation is
+the same**, not by whether the file format matches. A BAM is a BAM; the density it
+represents is not.
+
+### Shared mechanics, method-specific rules
+
+| Job | Shared | Kept per method |
+| --- | --- | --- |
+| file reading, coordinate validation, logging, provenance | all | each module declares the inputs it needs |
+| BED operations, sequence extraction | all | genome, strand and coordinate convention |
+| BAM filtering and fragment counting | one implementation | single/paired end, duplicate and MAPQ rules, fragment length |
+| BAM to BigWig | one coverage engine | fragment coverage, cut-site resolution, normalisation unit |
+| QC | metric computation | which metric set applies, and its thresholds |
+| peak calling | one tool-invocation interface | caller, control, narrow/broad, parameters |
+| peak annotation, motif scanning | one implementation | which regions and which background |
+| differential analysis | one design parser, one BH implementation | the statistical model: counts, methylation counts and continuous signal are not interchangeable |
+| plotting | one set of functions | axis units, effect direction, metric definition |
+
+An entry point exists per function, and shared behaviour is implemented once. A
+per-method script owns the parameters and the rules and calls the shared function;
+a Python user can import that same function.
+
+### Group and signal class are different axes
+
+`easyepi/assays.py` answers two questions that a single assay name cannot:
+
+* `canonical_assay(x)` — which **group** does this belong to (`atac`, `chip`,
+  `histone`, `mnase`, `methylation`). MACS3 arguments and QC metric sets key on it.
+* `describe_assay(x)` — a full :class:`Assay`: spelling, group, **and signal class**.
+
+Why both are needed, with the defect that produced the second one. CUT&Tag and
+CUT&RUN both map to the `chip` group, because MACS3 genuinely calls peaks on them
+the same way. They do **not** measure the same thing:
+
+| Assay | Group | Signal class | Strand shift |
+| --- | --- | --- | --- |
+| ATAC | `atac` | `density` | Tn5 offset (ATAC default) |
+| CUT&Tag | `chip` | `tn5_insertion` | +4/-5 Tn5 offset |
+| CUT&RUN | `chip` | `mnase_footprint` | **none** — no Tn5 footprint exists |
+| ChIP / histone | `chip` / `histone` | `fragment_depth` | none |
+| MNase | `mnase` | `mnase_footprint` | none |
+| WGBS | `methylation` | `methylation` | none |
+
+The Tn5 decision used to be made by re-matching the raw spelling inside
+`bam2bw_cli`, so it was correct only while nobody normalised first:
+
+```
+resolve_defaults("cuttag")            -> shift "tn5"    correct
+resolve_defaults(canonical_assay(…))  -> shift "none"   wrong by 4-5 bp, silently
+```
+
+Anything that decides **how to process** the data must call `describe_assay` once
+and read both fields from the returned object. `canonical_assay` remains correct
+for callers that only need the group.
+
+### Sequencing method and experimental design
+
+These are separate too. The method (ATAC, ChIP, CUT&Tag, CUT&RUN, methylation) is
+properties of the data; the design (single sample, multi-sample, two-group, paired,
+time course, multi-factor) is a property of the study. Reading a sample, running QC,
+scanning motifs and annotating peaks need no group column. Only differential
+analysis reads `design.tsv`.
+

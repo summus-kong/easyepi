@@ -262,6 +262,28 @@ step has different evidence needs and none substitutes for another.
 
 ---
 
+## Phase 3.5 — Architecture (P1, done as part of the motif work)
+
+### 3.5.1 Group and signal class are separate axes
+
+- **Priority** P1 · **Status** DONE
+- **Problem** `canonical_assay` answered "which group", and the Tn5 shift was then
+  decided by re-matching the raw spelling. CUT&Tag and CUT&RUN both map to `chip`,
+  so `resolve_defaults(canonical_assay("cuttag"))` returned `shift: none` while
+  `resolve_defaults("cuttag")` returned `tn5` — a 4-5 bp displacement of every cut
+  site, silently, for any caller that normalised first.
+- **Approach** Two functions with two contracts. `canonical_assay(x)` keeps
+  returning the group, so MACS3 arguments are unchanged. `describe_assay(x)`
+  returns spelling, group and signal class, and anything deciding *how to process*
+  reads both fields from that one object.
+- **Done when** The answer does not depend on call order, and CUT&RUN never
+  receives a Tn5 offset in any spelling.
+- **Test data** `tests/test_assay_vocabulary.py` — 8 new tests covering both
+  assays, every accepted spelling, and the ATAC/WGBS classes.
+- **Risk** A caller that passes only a group label (`"chip"`) still cannot recover
+  the signal class, and that is correct: the group genuinely does not say. The
+  docs state it rather than adding a fallback that would guess.
+
 ## Phase 4 — Explanation and scale (P2)
 
 ### 4.1 Cross-omics interpretation

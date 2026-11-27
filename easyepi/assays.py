@@ -21,6 +21,8 @@ uses :func:`accepted_spellings`. A spelling added here is accepted everywhere at
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 #: The five assays the suite models. Values are the labels used in reports and in
 #: the per-assay tables below.
 CANONICAL_ASSAYS: tuple[str, ...] = ("atac", "chip", "histone", "mnase", "methylation")
@@ -47,6 +49,50 @@ ASSAY_ALIASES: dict[str, str] = {
 }
 
 
+#: What each canonical assay *measures*, as distinct from which group it belongs
+#: to. Two assays can share a grouping and differ here -- which is exactly the
+#: CUT&Tag/CUT&RUN case that a single `canonical_assay` answer could not express.
+#:
+#: ``tn5_insertion``  strand-resolved transposase insertion; needs the +4/-5 offset
+#: ``mnase_footprint`` MNase-protected fragment; no Tn5 offset exists to apply
+#: ``fragment_depth``  read-body depth over a ChIP fragment
+#: ``density``         accessibility or occupancy density, no strand offset
+#: ``methylation``     per-cytosine calls with coverage
+SIGNAL_CLASSES: tuple[str, ...] = (
+    "tn5_insertion", "mnase_footprint", "fragment_depth", "density", "methylation",
+)
+
+#: Canonical assay -> the signal it measures.
+#:
+#: `cuttag` and `cutrun` share the `chip` *group* (MACS3 calls peaks on them alike)
+#: but must not share a signal model, so they carry distinct entries here. This is
+#: the table that the old spelling-matching in `bam2bw_cli` was standing in for.
+ASSAY_SIGNAL: dict[str, str] = {
+    "atac": "density",
+    "chip": "fragment_depth",
+    "histone": "fragment_depth",
+    "mnase": "mnase_footprint",
+    "methylation": "methylation",
+    # Filled per spelling below, because `canonical_assay` maps both to `chip`.
+}
+
+#: Spellings that must NOT inherit their group's signal model.
+#:
+#: This is deliberately keyed by normalised spelling rather than by canonical
+#: label: two different assays collide on `chip`, and the collision is the whole
+#: reason this table exists.
+SIGNAL_OVERRIDES: dict[str, str] = {
+    "cut&tag": "tn5_insertion",
+    "cuttag": "tn5_insertion",
+    "cut-tag": "tn5_insertion",
+    "cut_tag": "tn5_insertion",
+    "cut&run": "mnase_footprint",
+    "cutrun": "mnase_footprint",
+    "cut-run": "mnase_footprint",
+    "cut_run": "mnase_footprint",
+}
+
+
 class AssayError(ValueError):
     """Raised when an assay is missing, unknown, or incompatible with its inputs."""
 
@@ -70,6 +116,89 @@ def canonical_assay(assay: object) -> str:
         raise AssayError(
             f"unknown assay {assay!r}; choose one of " + ", ".join(CANONICAL_ASSAYS))
     return key
+
+
+def signal_class(assay: object) -> str:
+    """What ``assay`` measures, independent of which group it peaks with.
+
+    Raises for an unknown spelling, like :func:`canonical_assay`, so a caller cannot
+    get a silently wrong signal model from a typo.
+    """
+    key = _normalise(assay)
+    if key in SIGNAL_OVERRIDES:
+        return SIGNAL_OVERRIDES[key]
+    canonical = ASSAY_ALIASES.get(key)
+    if canonical is None:
+        raise AssayError(
+            f"unknown assay {assay!r}; choose one of " + ", ".join(CANONICAL_ASSAYS))
+    return ASSAY_SIGNAL[canonical]
+
+
+def uses_tn5_shift(assay: object) -> bool:
+    """Whether the +4/-5 Tn5 offset applies.
+
+    Answered from the signal class, so it survives normalisation:
+    ``uses_tn5_shift("cuttag")`` and ``uses_tn5_shift(canonical_assay("cuttag"))``
+    differ only if the signal model is read from the group, which it no longer is.
+    """
+    return signal_class(assay) == "tn5_insertion"
+
+
+def is_cutsite_assay(assay: object) -> bool:
+    """Whether the assay resolves a cut site, which wants a fine bin.
+
+    True for Tn5 insertion and for MNase footprints: both are positional in a way
+    read-body depth is not.
+    """
+    return signal_class(assay) in {"tn5_insertion", "mnase_footprint"}
+
+
+@dataclass(frozen=True)
+class Assay:
+    """Everything a processing decision needs to know about an assay.
+
+    Three fields, three questions, answered once:
+
+    ``spelling``  what the user typed, normalised -- keeps the audit trail honest
+    ``group``     which analysis family it belongs to, for shared rules (MACS3
+                  format, QC metric set)
+    ``signal``    what is actually measured, which the group does not determine
+    """
+
+    spelling: str
+    group: str
+    signal: str
+
+    @property
+    def uses_tn5_shift(self) -> bool:
+        return self.signal == "tn5_insertion"
+
+    @property
+    def is_cutsite(self) -> bool:
+        return self.signal in {"tn5_insertion", "mnase_footprint"}
+
+
+def describe_assay(assay: object) -> Assay:
+    """Resolve any accepted spelling into spelling, group and signal class.
+
+    This is the entry point for anything that decides how to *process* data. Use
+    :func:`canonical_assay` only when nothing but the group matters.
+
+    Named `describe_` rather than `resolve_` because `easyepi.qc_assay` already
+    exports a `resolve_assay(assay, available)` that answers a different
+    question (which metric set applies to a sample set); two functions with one
+    name and different arity is how a silent mis-import happens.
+
+    Raises :class:`AssayError` for an unknown spelling, so a typo cannot silently
+    yield a default signal model.
+    """
+    key = _normalise(assay)
+    group = ASSAY_ALIASES.get(key)
+    if group is None:
+        raise AssayError(
+            f"unknown assay {assay!r}; choose one of " + ", ".join(CANONICAL_ASSAYS))
+    signal = SIGNAL_OVERRIDES.get(key, ASSAY_SIGNAL[group])
+    return Assay(spelling=key, group=group, signal=signal)
 
 
 def is_known(assay: object) -> bool:
