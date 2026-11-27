@@ -231,3 +231,119 @@ def test_homer_run_reports_the_motifs_it_found(tmp_path, monkeypatch):
 
     res = external_tools.run_homer_motifs(str(target), str(bg), str(out))
     assert res["n_denovo_motifs"] == 3, res
+
+
+def _fasta(tmp_path, name, seqs):
+    path = tmp_path / name
+    path.write_text("".join(f">s{i}\n{s}\n" for i, s in enumerate(seqs)),
+                    encoding="utf-8")
+    return path
+
+
+def test_package_and_scan_work_with_no_homer_at_all(tmp_path, monkeypatch):
+    """HOMER is not a dependency of the package or of PWM scanning.
+
+    This is the property the user asked for: not installing HOMER must not break
+    the install, the import, or a scan. Only de novo discovery needs it.
+    """
+    import easyepi
+    from easyepi.motifs import external_tools
+
+    monkeypatch.setattr(external_tools, "which_tool", lambda *a, **k: None)
+    monkeypatch.setattr(external_tools, "tool_available", lambda *a, **k: False)
+
+    # import and the public surface still work
+    assert callable(easyepi.scan_sequences)
+    assert not hasattr(easyepi, "homer_like"), "homer_like must be gone"
+
+    # a scan runs with no external program
+    from easyepi.motifs import read_pwm, scan_sequences
+
+    pwm_file = tmp_path / "m.pfm"
+    pwm_file.write_text("10 0 0 0\n0 10 0 0\n0 0 0 0\n0 0 10 10\n", encoding="utf-8")
+    res = scan_sequences(read_pwm(pwm_file), ["ACGT", "GGGG"])
+    assert len(res["scores"]) == 2
+
+
+def test_known_enrichment_needs_no_homer(tmp_path, monkeypatch):
+    """Known-motif enrichment is numpy/scipy only; it must not probe HOMER."""
+    from easyepi.motifs import external_tools, homer_workflow
+
+    def _boom(*a, **k):
+        raise AssertionError("known enrichment must not call HOMER")
+
+    monkeypatch.setattr(external_tools, "run_homer_motifs", _boom)
+    target = ["ACGTACGTAC"] * 4
+    bg = ["GGGGCCCCGG"] * 4
+
+    # `.motifs` is the concatenated-collection reader: a tab-separated header,
+    # then one row of four probabilities per position. (`.motif` dispatches to a
+    # different parser, which expects base letters on the rows.)
+    motif_file = tmp_path / "k.motifs"
+    motif_file.write_text(
+        ">ACGT\tMOTIF1/Test\t6.0\t0\t0\tT:1.0,B:0.1\n"
+        "0.9 0.1 0.0 0.0\n0.0 0.9 0.1 0.0\n0.0 0.1 0.9 0.0\n0.1 0.0 0.1 0.8\n",
+        encoding="utf-8")
+    motifs = homer_workflow.load_known_motifs(extra_pfm_files=[str(motif_file)])
+    assert motifs, "fixture did not parse"
+
+    rows = homer_workflow.known_motif_enrichment_homer(target, bg, motifs)
+    assert isinstance(rows, list)
+
+
+def test_de_novo_without_homer_reports_what_is_missing(tmp_path, monkeypatch):
+    """De novo must fail clearly and point at the alternatives, not substitute."""
+    from easyepi.motifs import external_tools, homer_workflow
+
+    def _absent(*a, **k):
+        raise external_tools.ToolNotAvailableError(
+            "External tool 'findMotifs.pl' is not installed.")
+
+    monkeypatch.setattr(external_tools, "run_homer_motifs", _absent)
+    target = _fasta(tmp_path, "t.fa", ["ACGTACGTAC"] * 3)
+    bg = _fasta(tmp_path, "b.fa", ["GGGGCCCCGG"] * 3)
+
+    try:
+        homer_workflow.run_homer_workflow(
+            str(target), str(bg), str(tmp_path / "o"), k=4, backend="homer")
+    except external_tools.ToolNotAvailableError as exc:
+        assert "not installed" in str(exc)
+    else:
+        raise AssertionError("de novo discovery must require HOMER")
+
+
+def test_native_backend_is_refused_with_an_explanation(tmp_path):
+    """--backend native must not silently do nothing after the removal."""
+    from easyepi.motifs import homer_workflow
+
+    target = _fasta(tmp_path, "t.fa", ["ACGTACGTAC"] * 3)
+    bg = _fasta(tmp_path, "b.fa", ["GGGGCCCCGG"] * 3)
+
+    try:
+        homer_workflow.run_homer_workflow(
+            str(target), str(bg), str(tmp_path / "o"), k=4, backend="native")
+    except ValueError as exc:
+        msg = str(exc)
+        assert "no built-in engine" in msg
+        # The message has to be actionable, not just a refusal.
+        assert "--pwm" in msg or "--db" in msg
+    else:
+        raise AssertionError("--backend native should be refused now")
+
+
+def test_homer_failure_still_raises(tmp_path, monkeypatch):
+    """An installed-but-failing HOMER must not be reported as a result."""
+    from easyepi.motifs import external_tools, homer_workflow
+
+    monkeypatch.setattr(external_tools, "run_homer_motifs",
+                        lambda *a, **k: {"returncode": 3, "stderr": "boom"})
+    target = _fasta(tmp_path, "t.fa", ["ACGTACGTAC"] * 3)
+    bg = _fasta(tmp_path, "b.fa", ["GGGGCCCCGG"] * 3)
+
+    try:
+        homer_workflow.run_homer_workflow(
+            str(target), str(bg), str(tmp_path / "o"), k=4, backend="auto")
+    except RuntimeError as exc:
+        assert "HOMER findMotifs.pl failed" in str(exc)
+    else:
+        raise AssertionError("a failing HOMER run must raise")

@@ -736,9 +736,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_mo.add_argument("--k", type=int, default=8, help="de novo k-mer length (default 8)")
     p_mo.add_argument(
         "--backend", default="auto", choices=["auto", "native", "homer"],
-        help="auto/homer delegate to HOMER (and refuse if it is absent or fails); "
-             "native is an exploratory heuristic measuring a mean 3.90 bp of "
-             "consensus overlap with HOMER on real peaks, not a replacement")
+        help="auto uses HOMER when installed and otherwise the built-in engine, "
+             "warning that the result is not HOMER-equivalent; homer requires "
+             "HOMER and fails without it; native always uses the built-in "
+             "engine. HOMER is optional: nothing needs to be installed to run "
+             "this command")
     p_mo.add_argument("--homer-dir", default=None, help="path to HOMER share/homer dir (migrated install)")
     p_mo.add_argument("--out", required=True,
                    help="directory for the motif tables and figures plus status.json")

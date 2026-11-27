@@ -4,10 +4,14 @@ Bulk epigenomics downstream analysis in Python. Every tool takes an aligned
 **BAM** and writes ordinary files (BigWig, BED, TSV, JSON, PNG).
 
 The *Python* package installs from PyPI; not every analysis behind it runs on
-Python alone. Peak calling imports the `macs3` Python package, and de novo motif
-discovery delegates to HOMER, an external program. `Install` below gives the
-per-command requirements, and `docs/RELIABILITY.md` states what each method is
-and is not validated against. Nothing is fetched at run time.
+Python alone. Peak calling imports the `macs3` Python package. De novo motif
+discovery requires HOMER, and easyepi deliberately ships no substitute for it: an
+earlier built-in version shared a mean 3.90 bp of consensus with HOMER's own top
+motifs, which is what unrelated short motifs look like, so it was removed rather
+than deprecated. Scanning known PWMs and testing known-motif enrichment need no
+external program. `Install` below gives the per-command requirements, and
+`docs/RELIABILITY.md` states what each method is and is not validated against.
+Nothing is fetched at run time.
 
 ```bash
 pip install -e ".[bam,viz,states]"   # pysam, pyBigWig, matplotlib, hmmlearn

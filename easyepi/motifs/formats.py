@@ -248,17 +248,42 @@ def read_meme(path: Union[str, Path]) -> List[Motif]:
             while j < len(lines) and "letter-probability" not in lines[j]:
                 j += 1
             if j < len(lines) and "alength" in lines[j]:
-                k = int(lines[j].split("alength=")[-1].split()[0])
-                mat = np.zeros((4, k), dtype=np.float64)
-                r = 0
+                # `alength` is the alphabet size (4 for DNA); `w` is the motif
+                # width and also the number of matrix rows, one row per position.
+                header = lines[j]
+                alength = 4
+                if "alength=" in header:
+                    alength = int(header.split("alength=")[-1].split()[0])
+                if alength != 4:
+                    raise ValueError(
+                        f"MEME motif {name!r} declares alength={alength}, but only "
+                        "DNA (alength=4) motifs are supported")
+                width = None
+                if " w=" in header:
+                    width = int(header.split("w=")[-1].split()[0])
+                rows = []
                 j += 1
-                while j < len(lines) and r < 4:
-                    nums = [float(x) for x in lines[j].split()]
-                    if nums:
-                        mat[r] = nums[:k]
-                        r += 1
+                while j < len(lines):
+                    parts = lines[j].split()
+                    if not parts:
+                        break
+                    try:
+                        nums = [float(x) for x in parts]
+                    except ValueError:
+                        break
+                    if len(nums) != 4:
+                        break
+                    rows.append(nums)
+                    if width is not None and len(rows) == width:
+                        break
                     j += 1
-                if r == 4:
+                if width is not None and len(rows) != width:
+                    raise ValueError(
+                        f"MEME motif {name!r} declares w={width} but has "
+                        f"{len(rows)} position rows")
+                if rows:
+                    # rows are positions; the internal layout is (4, width)
+                    mat = np.asarray(rows, dtype=np.float64).T
                     motifs.append(Motif(name=name, matrix=mat, id=mid, source="meme"))
                 i = j
             else:
@@ -279,11 +304,17 @@ def write_meme(motifs: List[Motif], path: Union[str, Path]) -> None:
         for m in motifs:
             mid = m.id or m.name
             fh.write(f"MOTIF {mid} {m.name}\n\n")
-            k = m.length
-            fh.write(f"letter-probability matrix: alength= {k} w= {k}\n")
+            # MEME's `letter-probability matrix` is one line per POSITION, each
+            # holding one probability per base, so the row count equals the
+            # motif width and `alength` is the alphabet size (4), not the width.
+            # Writing the transpose with `alength= <width>` produced files the
+            # MEME Suite rejected outright: "alphabet length value 10 which does
+            # not match the DNA alphabet length of 4".
             freq = m.matrix / m.matrix.sum(axis=0, keepdims=True)
-            for base_idx in range(4):
-                fh.write("  " + " ".join("%.5f" % v for v in freq[base_idx]) + "\n")
+            width = freq.shape[1]
+            fh.write(f"letter-probability matrix: alength= 4 w= {width}\n")
+            for pos in range(width):
+                fh.write("  " + " ".join("%.5f" % freq[b][pos] for b in range(4)) + "\n")
             fh.write("\n")
 
 
@@ -300,11 +331,52 @@ READERS = {
 }
 
 
+def _sniff_homer_layout(path: Union[str, Path]) -> str:
+    """Return "tagged" or "untagged" for a HOMER motif file.
+
+    Two layouts share the ``.motif`` extension:
+
+    untagged (what ``share/homer/motifs/*.motif`` actually contains):
+        >ATGACTCATC\tAP-1(bZIP)/...\t6.05\t-1.78e+03\t0\t9805.3,...
+        0.419  0.275  0.277  0.028
+    tagged (one row per base, base letter first):
+        >MOTIFNAME\t...
+        A\t0.419\t0.275\t...
+        C\t...
+
+    The extension cannot tell them apart, and real HOMER libraries are
+    untagged, so guessing by extension returned zero motifs.
+    """
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            stripped = line.strip()
+            if not stripped or stripped.startswith(("#", "//")):
+                continue
+            if stripped.startswith(">"):
+                continue
+            first = stripped.split("\t")[0].strip().upper()
+            return "tagged" if first in ("A", "C", "G", "T") else "untagged"
+    return "untagged"
+
+
 def read_motifs(path: Union[str, Path]) -> List[Motif]:
-    """Dispatch to the appropriate reader based on file extension."""
+    """Dispatch to the appropriate reader based on file extension and content."""
     ext = Path(path).suffix.lower()
     if ext not in READERS:
         raise ValueError(f"unknown motif format '{ext}' (supported: {list(READERS)})")
+
+    if ext in (".motif", ".motifs", ".homer"):
+        # Content decides between the two HOMER layouts; the extension does not.
+        layout = _sniff_homer_layout(path)
+        reader = read_homer if layout == "tagged" else read_homer_motifs
+        motifs = reader(path)
+        if not motifs:
+            raise ValueError(
+                f"no motifs parsed from {path} (detected {layout} HOMER layout "
+                f"with {reader.__name__}). An empty motif set silently disables "
+                "enrichment, so it is reported as an error instead")
+        return motifs
+
     return READERS[ext](path)
 
 

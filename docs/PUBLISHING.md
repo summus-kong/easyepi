@@ -30,8 +30,9 @@ reports a missing helper raises rather than reporting an empty result.
 External executables and databases are not bundled; `pyproject.toml` declares
 them under `[tool.easyepi.external]` so the requirement is readable rather than
 inferred from a failure. The analyses themselves are not all pure Python: peak
-calling imports `macs3`, `motifs` delegates de novo discovery to HOMER, and
-`chromhmm` drives ChromHMM's jar.
+calling imports `macs3`, de novo motif discovery requires HOMER, and `chromhmm`
+drives ChromHMM's jar. The package installs, imports and runs its other
+commands without any of them.
 
 No runtime code path launches R. `easyepi/dmr_r.py` does launch it, but it is a
 test bridge only: its single importer is `tests/test_beta_binomial_matches_dss.py`,

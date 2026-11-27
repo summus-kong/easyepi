@@ -227,9 +227,12 @@ Install for genome mode: `$ENV/share/homer/configureHomer.pl -install hg38`.
   segmentation.** Training recovers the planted two-mark structure, but no state
   call is compared to a published annotation, and the emission/transition values
   depend on the seed.
-- **HOMER's enrichment is not compared.** FASTA mode runs, but HOMER's
-  hypergeometric enrichment is not reproduced or cross-checked by easyepi's own
-  `homer_like` implementation.
+- **HOMER's enrichment is not compared.** FASTA mode runs and its output is
+  used directly, but HOMER's hypergeometric enrichment is not reproduced by
+  anything in easyepi: the `homer_like` implementation was removed in 0.7.1
+  after measuring 3.90 bp of mean shared consensus with HOMER's own top motifs.
+  `known_motif_enrichment_homer` is a different statistic (PWM scan + binomial
+  tail) and is not a HOMER reproduction either.
 
 ## Known limitations
 

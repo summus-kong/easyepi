@@ -61,6 +61,13 @@ same environment that runs `easyepi`. Nothing else here is required:
 | `macs3` (Python package) | `easyepi peaks` | command stops and prints the install line |
 | `samtools` | convenience only | not required |
 | `bedtools` | convenience only | not required |
+| HOMER | `easyepi motifs` de novo discovery | command stops and names the install line |
+
+HOMER is needed for de novo discovery only. There is no built-in substitute:
+`easyepi motifs --pwm` (scan a PWM) and `--db` with `--background` (known-motif
+enrichment) run on numpy and scipy alone, and every other subcommand is
+independent of HOMER. Nothing else in the suite downloads or launches a program
+you have not installed.
 
 ```bash
 python -m pip install macs3

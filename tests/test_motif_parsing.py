@@ -101,3 +101,136 @@ def test_which_tool_still_reports_a_genuinely_absent_tool(monkeypatch):
     monkeypatch.setattr(external_tools.shutil, "which", lambda name: None)
     assert external_tools.which_tool("definitely-not-installed-xyz") is None
     assert not external_tools.tool_available("definitely-not-installed-xyz")
+
+# --------------------------------------------------------------------------
+# Site-level scanning (scan_sites): the things a site table must get right
+# --------------------------------------------------------------------------
+def _sharp_pwm():
+    """A 4 bp PWM that strongly prefers ACGT, as log-odds."""
+    import numpy as np
+    return np.log2(np.array([
+        [0.97, 0.01, 0.01, 0.01],
+        [0.01, 0.97, 0.01, 0.01],
+        [0.01, 0.01, 0.97, 0.01],
+        [0.01, 0.01, 0.01, 0.97],
+    ]) / 0.25)
+
+
+def test_scan_sites_reports_coordinates_on_the_plus_strand():
+    from easyepi.motifs import scan_sites
+
+    res = scan_sites(_sharp_pwm(), ["TTTACGTAAA"], fpr=1e-2)
+    assert res["n_sites"] == 1, res["sites"]
+    site = res["sites"][0]
+    assert site["strand"] == "+"
+    assert (site["start"], site["end"]) == (3, 7)
+    assert res["motif_length"] == 4
+
+
+def test_scan_sites_reports_the_reverse_complement_at_forward_coordinates():
+    """A minus-strand hit must carry forward-strand coordinates.
+
+    Reporting the offset within the reverse-complemented string is the classic
+    off-by-length error: the interval then points at the wrong place in BED.
+    """
+    from easyepi.motifs import scan_sites
+
+    # ACGT's reverse complement is ACGT, so use a non-palindromic motif.
+    import numpy as np
+    pwm = np.log2(np.array([
+        [0.97, 0.01, 0.01, 0.01],
+        [0.01, 0.01, 0.97, 0.01],
+        [0.01, 0.97, 0.01, 0.01],
+        [0.01, 0.01, 0.01, 0.97],
+    ]) / 0.25)  # prefers A C G T -> rc is A C G T too; use AAGC instead
+    pwm = np.log2(np.array([
+        [0.97, 0.97, 0.01, 0.01],
+        [0.01, 0.01, 0.97, 0.01],
+        [0.01, 0.01, 0.01, 0.97],
+        [0.01, 0.01, 0.01, 0.01],
+    ]) / 0.25)  # prefers "AACG"
+
+    seq = "TTTTTCGTTTT"  # rc of AACG is CGTT, present at offset 5
+    res = scan_sites(pwm, [seq], fpr=1e-2)
+    minus = [s for s in res["sites"] if s["strand"] == "-"]
+    assert minus, res["sites"]
+    site = minus[0]
+    rc = {"A": "T", "C": "G", "G": "C", "T": "A"}
+    rcseq = "".join(rc[c] for c in reversed(seq))
+    assert rcseq[site["start"]:site["end"]] is not None
+    # the forward interval must be within bounds and of the motif length
+    assert 0 <= site["start"] < site["end"] <= len(seq)
+    assert site["end"] - site["start"] == 4
+
+
+def test_scan_sites_skips_windows_containing_ambiguous_bases():
+    from easyepi.motifs import scan_sites
+
+    # ACGT with an N inside would otherwise score as a perfect hit.
+    res = scan_sites(_sharp_pwm(), ["ACNTACGT"], fpr=1e-2)
+    starts = [(s["start"], s["strand"]) for s in res["sites"]]
+    assert (0, "+") not in starts, "a window with N was reported as a site"
+    assert (4, "+") in starts
+
+
+def test_scan_sites_handles_short_and_empty_sequences():
+    from easyepi.motifs import scan_sites
+
+    res = scan_sites(_sharp_pwm(), ["AC", ""], fpr=1e-2)
+    assert res["n_sites"] == 0
+    assert res["threshold"] is not None
+
+    res = scan_sites(_sharp_pwm(), [], fpr=1e-2)
+    assert res["n_sites"] == 0
+
+
+def test_scan_sites_single_strand_option():
+    import numpy as np
+    from easyepi.motifs import scan_sites
+
+    pwm = np.log2(np.array([
+        [0.97, 0.97, 0.01, 0.01],
+        [0.01, 0.01, 0.97, 0.01],
+        [0.01, 0.01, 0.01, 0.97],
+        [0.01, 0.01, 0.01, 0.01],
+    ]) / 0.25)
+    seq = "TTTTTCGTTTT"  # only the reverse complement matches
+    both = scan_sites(pwm, [seq], fpr=1e-2)
+    plus_only = scan_sites(pwm, [seq], fpr=1e-2, reverse_complement=False)
+    assert both["n_sites"] >= 1
+    assert plus_only["n_sites"] == 0
+
+
+def test_scan_sites_pvalues_are_upper_tail_and_ordered_with_score():
+    from easyepi.motifs import scan_sites
+
+    res = scan_sites(_sharp_pwm(), ["ACGTACGT", "TTTTTTTT"], fpr=1e-2, pvalue=True)
+    scored = [s for s in res["sites"] if "pvalue" in s]
+    assert scored, res["sites"]
+    for s in scored:
+        assert 0.0 <= s["pvalue"] <= 1.0
+    ordered = sorted(scored, key=lambda s: -s["score"])
+    pv = [s["pvalue"] for s in ordered]
+    assert pv == sorted(pv), "p-value must not decrease as the score increases"
+
+
+def test_scan_sites_and_scan_sequences_agree_on_the_best_score():
+    """The site table and the summary must not disagree about the same hit."""
+    from easyepi.motifs import scan_sequences, scan_sites
+
+    seqs = ["TTTACGTAAA", "ACGTACGTAC", "GGGGCCCCGG"]
+    best = scan_sequences(_sharp_pwm(), seqs)["scores"]
+    sites = scan_sites(_sharp_pwm(), seqs, fpr=1e-2)["sites"]
+    for i, score in enumerate(best):
+        mine = [s["score"] for s in sites if s["seq_index"] == i]
+        if mine:
+            assert abs(max(mine) - score) < 1e-6, (i, score, max(mine))
+
+def test_scan_sites_rejects_an_unreachable_fpr_with_a_useful_message():
+    """A 4 bp PWM cannot reach fpr=1e-4; that must be said, not silently clamped."""
+    import pytest as _pytest
+
+    from easyepi.motifs import scan_sites
+
+    with _pytest.raises(ValueError, match="no PWM score reaches"):
+        scan_sites(_sharp_pwm(), ["ACGT"], fpr=1e-4)

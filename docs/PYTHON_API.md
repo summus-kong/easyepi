@@ -104,4 +104,8 @@ All maintained independent entries accept an argv list. Parser errors use `Syste
 
 ## Legacy functions
 
-Existing `call_peaks_from_bam`, `poisson_peaks`, `discover_motifs`, `homer_like` and `homer_workflow` helpers remain available for compatibility and inspection. Their native heuristics are exploratory and must not be presented as replacements equivalent to MACS3, MEME or HOMER. Prefer the independent established-backend wrappers documented in the usage guide.
+`call_peaks_from_bam` and `poisson_peaks` remain available for compatibility and inspection; neither is a replacement equivalent to MACS3, and `easyepi peaks` wraps MACS3 instead.
+
+**Motif discovery has no built-in engine.** `discover_motifs`, `homer_like` and `de_novo_homer` were removed in 0.7.1 rather than deprecated. Both were measured against HOMER on real peak sequences and neither reproduced it: the k-mer counter shared a mean 3.90 bp of consensus with HOMER's top ten, which is the overlap of unrelated 8-10 bp motifs, and the EM variant returned `AAAAAAAA` and `CCAGCCTG` as its best two motifs while claiming all 600 sequences as sites. Keeping them meant producing plausible tables that the tool they stood in for would not reproduce.
+
+What does run without any external program is in `easyepi.motifs`: `read_pwm` and `scan_sequences` (numpy sliding-window PWM scanning, compared against FIMO in `docs/dev/TOOL_COMPARISONS.md`), and `known_motif_enrichment_homer` (PWM scan plus a binomial tail and BH correction), which is what `easyepi tf-annotate` and `easyepi motifs --pwm/--db` use. De novo discovery delegates to HOMER through `easyepi.motifs.external_tools.run_homer_motifs`, and a missing HOMER raises `ToolNotAvailableError` naming the install. HOMER is not a dependency of the package.

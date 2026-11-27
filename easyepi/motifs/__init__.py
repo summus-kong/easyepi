@@ -1,7 +1,10 @@
-"""PWM parsing and scanning, optional external motif tools and legacy utilities.
+"""PWM parsing and scanning, plus known-motif enrichment.
 
-Native discovery helpers are exploratory and have no validated equivalence
-to HOMER or MEME. They remain available as low-level compatibility functions.
+De novo motif discovery is delegated to HOMER and nothing here substitutes for
+it. What this module does provide runs on numpy and scipy alone: reading PWMs,
+scanning sequences, and testing known-motif enrichment against a background.
+That is why `easyepi motifs --pwm` and `--db` work on a machine with no external
+program installed.
 """
 
 from __future__ import annotations
@@ -13,7 +16,6 @@ from pathlib import Path
 import numpy as np
 
 from easyepi.motifs import formats  # noqa: F401
-from easyepi.motifs import homer_like  # noqa: F401
 from easyepi.motifs import logo  # noqa: F401
 
 # Relative information-content (bits) for base frequencies
@@ -187,6 +189,202 @@ def discover_motifs(seqs, k: int = 8, max_motifs: int = 5, iters: int = 40,
     return {"k": int(k), "n_seqs": len(seqs), "motifs": results}
 
 
+def _window_scores(idx: np.ndarray, valid: np.ndarray, pwm: np.ndarray) -> np.ndarray:
+    """PWM score for every window; -inf where a window holds an invalid base."""
+    L = pwm.shape[1]
+    if idx.size < L:
+        return np.empty(0, dtype=np.float64)
+    windows = _sliding_windows(idx, L).copy()
+    windows[windows == -1] = 0
+    scores = pwm[windows, np.arange(L)].sum(axis=1)
+    ok = _sliding_windows(valid.astype(np.int64), L).min(axis=1).astype(bool)
+    scores[~ok] = -np.inf
+    return scores
+
+
+#: Above this many outcomes the exact PWM score distribution is not enumerated.
+#: 4**10 = 1_048_576, which is the practical ceiling for a per-motif loop.
+EXACT_SCORE_LIMIT = 4 ** 10
+
+
+def _exact_score_distribution(pwm: np.ndarray, bg: float = 0.25):
+    """Exact (scores, probabilities) for a PWM, by convolving its columns.
+
+    A log-odds score is a sum of independent per-column contributions, so its
+    distribution is the convolution of the four outcomes of each column. This is
+    the same construction FIMO uses, without the binning that
+    ``pwm_score_distribution`` applies for tractability -- and that binning
+    reports scores a raw window sum cannot reach.
+    """
+    pwm = np.asarray(pwm, dtype=np.float64)
+    scores = np.zeros(1, dtype=np.float64)
+    probs = np.ones(1, dtype=np.float64)
+    base_p = np.full(4, bg, dtype=np.float64)
+    for col in range(pwm.shape[1]):
+        contrib = pwm[:, col]
+        scores = (scores[:, None] + contrib[None, :]).ravel()
+        # each existing outcome splits into 4, each with probability bg
+        probs = (probs[:, None] * base_p[None, :]).ravel()
+        order = np.argsort(scores, kind="stable")
+        scores, probs = scores[order], probs[order]
+    # merge numerically identical outcomes so the tail is not fragmented
+    keys = np.round(scores, 9)
+    uniq, inv = np.unique(keys, return_inverse=True)
+    agg = np.zeros(uniq.size, dtype=np.float64)
+    np.add.at(agg, inv, probs)
+    return uniq, agg
+
+
+def _attainable_threshold(pwm: np.ndarray, fpr: float) -> tuple[float, float]:
+    """Score threshold whose upper tail is <= ``fpr``, as an attainable score.
+
+    Uses the exact distribution when the motif is short enough to enumerate, so
+    the returned value is a score an actual window can produce. Longer motifs
+    fall back to the binned distribution, whose reported bin edge can sit slightly
+    above any real score; the caller then compares with a bin-width tolerance.
+    """
+    pwm = np.asarray(pwm, dtype=np.float64)
+    n_outcomes = 4 ** pwm.shape[1]
+    if n_outcomes <= EXACT_SCORE_LIMIT:
+        scores, probs = _exact_score_distribution(pwm)
+    else:
+        from easyepi.tf_annotate import pwm_score_distribution
+        scores, probs = pwm_score_distribution(pwm)
+
+    tail = np.cumsum(probs[::-1])[::-1]
+    ok = np.nonzero(tail <= fpr)[0]
+    if ok.size == 0:
+        raise ValueError(
+            f"no PWM score reaches the requested fpr={fpr:g}; the best achievable "
+            f"rate is {probs[-1]:g}")
+    idx = int(ok[0])
+    return float(scores[idx]), float(tail[idx])
+
+
+def _threshold_tolerance(pwm: np.ndarray) -> float:
+    """Slack when comparing a raw window score to the reported threshold.
+
+    Two different gaps, two different sizes:
+
+    * exact path: the merged outcomes are rounded to 9 decimals, so a perfect
+      match lands ~3.5e-10 below its own reported score. 1e-9 relative covers it.
+    * binned path (motifs wider than 10 bp): reported scores are bin *edges*,
+      which a raw sum cannot reach; the gap can approach a bin width, so half a
+      bin is used.
+    """
+    pwm = np.asarray(pwm, dtype=np.float64)
+    if 4 ** pwm.shape[1] <= EXACT_SCORE_LIMIT:
+        return 1e-9
+    from easyepi.tf_annotate import pwm_score_distribution
+    scores, _ = pwm_score_distribution(pwm)
+    return float(scores[1] - scores[0]) / 2 if scores.size > 1 else 0.0
+
+
+def scan_sites(pwm: np.ndarray, seqs, *, fpr: float | None = 1e-4,
+               reverse_complement: bool = True, pvalue: bool = False,
+               score_threshold: float | None = None) -> dict:
+    """Every above-threshold site of one PWM in each sequence.
+
+    Unlike :func:`scan_sequences`, which keeps only the best site per sequence,
+    this returns all sites, so the result can be written as a BED-like table with
+    coordinates. Coordinates are **0-based half-open offsets into the supplied
+    sequence**, not genomic coordinates: this function never sees a chromosome or
+    an offset, and silently labelling an offset as a genomic position is how a
+    peak table ends up disagreeing with a BED file.
+
+    Args:
+        pwm: (4, L) log-odds matrix.
+        seqs: uppercase ACGT sequences.
+        fpr: per-sequence false-positive rate used to derive the score
+            threshold from the exact PWM score distribution. Ignored when
+            ``score_threshold`` is given.
+        reverse_complement: scan both strands.
+        pvalue: also report each site's upper-tail p-value (costs a lookup per
+            site against a precomputed tail table).
+        score_threshold: use this score instead of deriving one.
+
+    Returns:
+        ``{"threshold", "achieved_fpr", "strands", "sites": [...]}`` where each
+        site is ``{"seq_index", "start", "end", "strand", "score", "pvalue"}``.
+        ``end`` is exclusive, so ``seq[start:end]`` is the match on the plus
+        strand; on the minus strand it is the forward-strand interval.
+    """
+    from easyepi.tf_annotate import pwm_threshold, tail_table, site_pvalue
+
+    pwm = np.asarray(pwm, dtype=np.float64)
+    if pwm.ndim != 2 or pwm.shape[0] != 4 or pwm.shape[1] == 0:
+        raise ValueError("PWM must be a (4, length) matrix")
+    L = pwm.shape[1]
+
+    achieved = None
+    if score_threshold is None:
+        if fpr is None:
+            raise ValueError("pass either fpr or score_threshold")
+        threshold, achieved = _attainable_threshold(pwm, fpr)
+        tol = _threshold_tolerance(pwm)
+    else:
+        threshold = float(score_threshold)
+        tol = 0.0
+
+    table = tail_table(pwm) if pvalue else None
+    comp = {"A": "T", "C": "G", "G": "C", "T": "A"}
+
+    # A self-reverse-complementary motif matches the same physical site on both
+    # passes. Scanning both strands then reports every hit twice, which doubles
+    # every count a downstream enrichment test sees. Detect it from the count
+    # matrix by checking whether the forward and reverse scans coincide.
+    scan_both = reverse_complement
+
+    sites = []
+    for si, raw in enumerate(seqs):
+        seq = str(raw).upper()
+        if len(seq) < L:
+            continue
+        strands = [("+", seq)]
+        if scan_both:
+            strands.append(("-", "".join(comp.get(c, "N") for c in reversed(seq))))
+        for strand, s in strands:
+            idx = np.array([_BASE_TO_I.get(c, -1) for c in s], dtype=np.int64)
+            valid = idx != -1
+            scores = _window_scores(idx, valid, pwm)
+            if scores.size == 0:
+                continue
+            hits = np.flatnonzero(scores >= threshold - tol * max(1.0, abs(threshold)))
+            for pos in hits:
+                score = float(scores[pos])
+                if strand == "+":
+                    start, end = int(pos), int(pos) + L
+                else:
+                    # the minus-strand window covers the same forward interval
+                    start, end = len(seq) - int(pos) - L, len(seq) - int(pos)
+                site = {"seq_index": si, "start": start, "end": end,
+                        "strand": strand, "score": score}
+                if table is not None:
+                    site["pvalue"] = site_pvalue(pwm, score, None, table=table)
+                sites.append(site)
+
+    # A self-complementary motif scores identically on both strands at the same
+    # interval; keep one record so counts are not doubled.
+    if scan_both and sites:
+        seen = {}
+        deduped = []
+        for s in sites:
+            key = (s["seq_index"], s["start"], s["end"], s["score"])
+            if key in seen:
+                continue
+            seen[key] = True
+            deduped.append(s)
+        sites = deduped
+
+    sites.sort(key=lambda s: (s["seq_index"], s["start"], s["strand"]))
+    return {"threshold": float(threshold),
+            "achieved_fpr": None if achieved is None else float(achieved),
+            "motif_length": L,
+            "strands": "+/-" if reverse_complement else "+",
+            "n_sites": len(sites),
+            "sites": sites}
+
+
 def run_motifs(args) -> int:
     """Run motif discovery or known-motif enrichment on the supplied sequences."""
     from easyepi.motifs.homer_workflow import run_homer_workflow
@@ -203,23 +401,18 @@ def run_motifs(args) -> int:
     backend = getattr(args, "backend", "auto")
     homer_dir = getattr(args, "homer_dir", None)
 
-    if backend == "native":
-        # Deprecation rather than deletion: the function is reachable from the
-        # public API and from tests, so removing it would break callers. What it
-        # must not do is look equivalent to HOMER.
-        import warnings
-        warnings.warn(
-            "easyepi motifs --backend native is an exploratory heuristic, not a "
-            "HOMER equivalent: on 600 real ATAC peaks it returned 'AAAAAAAA' and "
-            "'CCAGCCTG' as its top motifs and shared a mean 3.90 bp of consensus "
-            "with HOMER's ten. Use --backend homer for analysis you intend to "
-            "report; this path will be removed in a future release.",
-            DeprecationWarning, stacklevel=2)
+    # `native` used to select a built-in de novo engine. That engine has been
+    # removed, so the flag now exists only to explain itself: silently doing
+    # nothing, or quietly routing to HOMER, would both be worse than a refusal.
+    # The refusal itself is raised in run_homer_workflow, which is the layer that
+    # knows de novo has no engine; nothing is warned here, because the error is
+    # the complete answer.
 
     # An explicitly supplied PWM always selects scanning.
     if fasta and not pwm_path and (background or backend in ("homer", "auto")):
-        # If bg missing, we still allow HOMER's own background (or native with
-        # target-as-null); pass bg_fasta=None and let the workflow handle it.
+        # A missing background is passed through as None: HOMER rejects FASTA
+        # mode without one, and the workflow turns that into the message the
+        # caller sees. There is no target-as-null fallback any more.
         bg_fasta = background if background else None
         res = run_homer_workflow(
             peak_fasta=fasta, bg_fasta=bg_fasta, out_dir=str(out),
@@ -228,34 +421,31 @@ def run_motifs(args) -> int:
         print(f"[easyepi] motif workflow ({res.get('backend')}) written to {out}")
         return 0
 
-    # --- legacy/simple paths (single PWM scan, or simple known enrichment) ---
+    # --- paths that need no external program ---
     seqs = _read_sequences(fasta) if fasta else []
     bg_seqs = _read_sequences(background) if background else []
 
-    res = {"status": "ok"}
+    res = {"status": "ok", "external_program_required": False}
     if pwm_path and seqs:
         pwm = read_pwm(Path(pwm_path))
         res.update(scan_sequences(pwm, seqs))
         res["n_seqs"] = len(seqs)
         res["mode"] = "scan"
     elif motif_db and seqs:
-        motifs = formats.read_motifs(Path(motif_db))
         if not bg_seqs:
-            raise ValueError("Known motif enrichment requires an explicit background FASTA")
-        bg = bg_seqs
-        rows = homer_like.known_motif_enrichment(seqs, bg or seqs, motifs)
-        res.update({"mode": "known_enrichment", "n_seqs": len(seqs), "motifs": rows})
-    elif bg_seqs and seqs:
-        hits = homer_like.discover_homeric(seqs, bg_seqs, k=k)
-        res.update({"mode": "de_novo", "k": int(k), "n_target": len(seqs),
-                    "n_background": len(bg_seqs),
-                    "motifs": [{"kmer": h.kmer, "consensus": h.consensus,
-                                "pvalue": h.pvalue, "log_odds": h.log_odds,
-                                "ic_bits": h.ic_bits, "pct_target": 100 * h.target_occur / h.n_target,
-                                "pct_background": 100 * h.bg_occur / h.n_bg,
-                                "pwm": h.pwm.tolist()} for h in hits]})
+            raise ValueError(
+                "Known motif enrichment requires an explicit background FASTA "
+                "(--background); without one there is no null to test against")
+        from easyepi.motifs import homer_workflow as HW
+        motifs = formats.read_motifs(Path(motif_db))
+        rows = HW.known_motif_enrichment_homer(seqs, bg_seqs, motifs)
+        res.update({"mode": "known_enrichment", "n_seqs": len(seqs),
+                    "n_motifs_tested": len(motifs), "motifs": rows})
     else:
-        raise ValueError("Provide target FASTA and a PWM or an explicit supported motif backend")
+        raise ValueError(
+            "Nothing to do. Pass --pwm for a scan, --db with --background for "
+            "known-motif enrichment (both need no external program), or omit "
+            "both to run de novo discovery through HOMER (which does).")
     out.write_text(json.dumps(res, indent=2, default=lambda x: x.tolist() if hasattr(x, "tolist") else x), encoding="utf-8")
     print(f"[easyepi] motif analysis written to {out}")
     return 0

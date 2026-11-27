@@ -100,11 +100,10 @@ from easyepi.methylation import (  # noqa: F401
 )
 
 from easyepi.motifs import (  # noqa: F401
-    discover_motifs,
     read_pwm,
     scan_sequences,
+    scan_sites,
     formats,
-    homer_like,
     homer_workflow,
     external_tools,
 )
@@ -141,8 +140,8 @@ __all__ = [
     # annotate
     "annotate_peaks", "read_intervals",
     # motifs
-    "read_pwm", "scan_sequences", "discover_motifs",
-    "formats", "homer_like", "homer_workflow", "external_tools",
+    "read_pwm", "scan_sequences", "scan_sites",
+    "formats", "homer_workflow", "external_tools",
     "washu", "footprint", "pubfig",
     "run_footprint", "read_site_bed",
     # unified project contract and run logging

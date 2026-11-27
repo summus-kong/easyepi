@@ -1,6 +1,8 @@
-"""Optional official HOMER delegation and legacy exploratory motif utilities.
+"""Official HOMER delegation plus a self-contained known-motif enrichment.
 
-The native utilities are not a reimplementation or equivalent of HOMER.
+De novo discovery is delegated to HOMER; there is no bundled substitute. The
+known-motif enrichment below needs no external program: it scans PWMs with
+numpy and tests hits with a binomial tail, and it is what `tf-annotate` uses.
 """
 
 from __future__ import annotations
@@ -12,7 +14,6 @@ import numpy as np
 
 from easyepi.core.stats import benjamini_hochberg
 from easyepi.motifs import formats as F
-from easyepi.motifs import homer_like as HL
 from easyepi.motifs import scan_sequences
 
 _BASES = "ACGT"
@@ -173,33 +174,6 @@ def known_motif_enrichment_homer(target_seqs: Sequence[str], bg_seqs: Sequence[s
 
 
 # ---------------------------------------------------------------------------
-# De novo discovery (HOMER-style), boosted with background GC correction
-# ---------------------------------------------------------------------------
-def de_novo_homer(target_seqs: Sequence[str], bg_seqs: Sequence[str],
-                  k: int = 8, max_motifs: int = 10) -> List[Dict]:
-    """Run HOMER-style de novo discovery and return HOMER-result-compatible rows.
-
-    Rows: consensus, kmer, log_p, pct_target, pct_background, ic_bits, pwm.
-    """
-    hits = HL.discover_homeric(target_seqs, bg_seqs, k=k, max_motifs=max_motifs,
-                               max_candidates=4000)
-    rows = []
-    for h in hits:
-        logp = float(-np.log10(max(h.pvalue, 1e-300)))
-        rows.append({
-            "consensus": h.consensus, "kmer": h.kmer,
-            "n_target_with_motif": int(h.target_occur),
-            "pct_target": round(100 * h.target_occur / h.n_target, 2),
-            "pct_background": round(100 * h.bg_occur / h.n_bg, 2) if h.n_bg else 0.0,
-            "enrichment_fold": round(2 ** h.log_odds, 2) if h.log_odds != 10.0 else float("inf"),
-            "log_p": round(logp, 3), "pvalue": h.pvalue,
-            "ic_bits": round(h.ic_bits, 2), "log_odds": round(h.log_odds, 2),
-            "pwm": h.pwm.tolist(),
-        })
-    return rows
-
-
-# ---------------------------------------------------------------------------
 # Multiple PFM database merge (HOMER + optional JASPAR/HOCOMOCO/Cis-BP)
 # ---------------------------------------------------------------------------
 def load_known_motifs(homer_known: Optional[str] = None,
@@ -279,79 +253,50 @@ def run_homer_workflow(peak_fasta: str, bg_fasta: Optional[str], out_dir: str,
                        homer_known: Optional[str] = None,
                        backend: str = "auto",
                        homer_dir: Optional[str] = None) -> Dict:
-    """Delegate auto/homer requests to HOMER; native must be explicitly selected.
+    """De novo discovery through HOMER, plus an optional built-in known enrichment.
 
-    Native is retained only for exploratory backwards compatibility, requires
-    a distinct background, and has no validated HOMER equivalence.
+    De novo is HOMER's job and only HOMER's: the package ships no substitute, so
+    there is no mode in which a caller receives heuristic numbers believing them
+    to be HOMER's. ``backend`` is kept for API compatibility:
+
+        ``auto`` / ``homer``  run HOMER; absent or failing raises.
+        ``native``            not supported for de novo any more; the known
+                              enrichment still works and is reached with
+                              ``--db``/``--pwm`` through ``easyepi motifs``.
+
+    This makes HOMER a requirement for this function, not for the package: every
+    other command, and `easyepi motifs --pwm`/`--db`, runs without it.
     """
     from easyepi.motifs import external_tools as ET
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    # Delegate to the real HOMER when requested / available.
-    if backend not in {"auto", "homer", "native"}:
+    if backend == "native":
+        raise ValueError(
+            "de novo motif discovery has no built-in engine any more: the "
+            "homer_like implementation was removed because it did not reproduce "
+            "HOMER (3.90 bp mean shared consensus, and its EM variant claimed "
+            "every sequence as a site). Install HOMER and use --backend homer, "
+            "or scan known motifs with --pwm/--db, which needs no external "
+            "program.")
+    if backend not in {"auto", "homer"}:
         raise ValueError(f"Unknown motif backend: {backend}")
-    use_homer = backend in ("homer", "auto")
-    if use_homer and (known_motif_files or extra_pfm_dirs or homer_known):
-        raise ValueError("Custom motif libraries are not forwarded to HOMER by this wrapper; use FIMO or HOMER directly")
-    if use_homer:
-        # A failed HOMER run raises. It used to fall through to the native path,
-        # so a user who asked for HOMER and got an error was quietly handed the
-        # exploratory heuristic's numbers under the same output filenames -- the
-        # one outcome the caller cannot detect. Only an absent executable is a
-        # different case, and that already raises ToolNotAvailableError.
-        homer_result = ET.run_homer_motifs(
-            peak_fasta, bg_fasta, str(out), k=k, homer_dir=homer_dir)
-        if homer_result.get("returncode") != 0:
-            raise RuntimeError(
-                "HOMER findMotifs.pl failed (exit "
-                f"{homer_result.get('returncode')}); refusing to fall back to the "
-                "exploratory native implementation, which is not equivalent. "
-                f"stderr: {homer_result.get('stderr', '')[-800:]}")
-        homer_result["backend"] = "homer"
-        return {**homer_result, "n_target": None, "n_background": None,
-                "delegated": True}
 
-    # --- Exploratory Python-native path (explicitly selected only) ---
-    target = read_fasta(peak_fasta)
-    bg = read_fasta(bg_fasta) if bg_fasta else None
-    if bg is None:
-        raise ValueError("Exploratory native motif analysis requires an explicit background FASTA")
+    if not bg_fasta:
+        raise ValueError("HOMER FASTA mode requires an explicit background FASTA")
 
-    # de novo
-    denovo = de_novo_homer(target, bg, k=k, max_motifs=max(n_denovo, 1))
-    write_homer_results(denovo, str(out / "homerResults.txt"))
+    homer_result = ET.run_homer_motifs(
+        peak_fasta, bg_fasta, str(out), k=k, homer_dir=homer_dir)
+    if homer_result.get("returncode") != 0:
+        raise RuntimeError(
+            "HOMER findMotifs.pl failed (exit "
+            f"{homer_result.get('returncode')}); stderr: "
+            f"{homer_result.get('stderr', '')[-800:]}")
 
-    # known enrichment (load HOMER library + optional external PFM libs)
-    known = load_known_motifs(homer_known=homer_known,
-                              extra_pfm_files=known_motif_files,
-                              extra_pfm_dirs=extra_pfm_dirs)
-    known_rows = known_motif_enrichment_homer(
-        target, bg, known, bg_model_threshold=bg_model_threshold,
-        mscore=mscore, gc_norm=gc_norm, gc_bins=gc_bins)
-    write_known_results(known_rows[:n_known], str(out / "knownResults.txt"))
-
-    # parameters
-    with open(out / "motifFindingParameters.txt", "w") as fh:
-        fh.write(f"backend={'homer' if use_homer else 'native'}\n")
-        fh.write(f"target_fasta={peak_fasta}\n")
-        fh.write(f"background_fasta={bg_fasta or 'None'}\n")
-        fh.write(f"k={k}\n")
-        fh.write(f"gc_norm={gc_norm}\n")
-        fh.write(f"n_known_motifs_tested={len(known)}\n")
-
-    return {
-        "backend": "homer" if use_homer else "native",
-        "delegated": bool(use_homer),
-        # Carried into the JSON a caller reads, not just the docstring: the two
-        # backends share filenames and a reader must be able to tell which one
-        # produced them.
-        "validated_equivalent_to": "none" if not use_homer else "HOMER",
-        "experimental": not use_homer,
-        "out_dir": str(out),
-        "n_target": len(target), "n_background": len(bg),
-        "n_denovo": len(denovo), "n_known_tested": len(known),
-        "n_known_reported": min(n_known, len(known_rows)),
-        "top_known": known_rows[0] if known_rows else None,
-    }
+    homer_result["backend"] = "homer"
+    homer_result["delegated"] = True
+    homer_result["validated_equivalent_to"] = "HOMER"
+    homer_result["experimental"] = False
+    homer_result["out_dir"] = str(out)
+    return homer_result

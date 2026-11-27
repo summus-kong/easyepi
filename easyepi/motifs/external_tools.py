@@ -1,18 +1,26 @@
 """Optional external motif-analysis tool backends.
 
-Easyepi's native motif modules (``homer_like`` / ``homer_workflow``) are the
-zero-dependency path. This module adds *optional* wrappers around the popular
-external motif suites, so a user can run them through Easyepi's unified
-interface when they are installed:
+Easyepi does not reimplement de novo motif discovery. An earlier attempt
+(``homer_like``) was removed rather than deprecated: on 300-600 real peak
+sequences it reported a mean 3.90 bp of shared consensus with HOMER's top ten,
+which is what unrelated 8-10 bp motifs look like, and its EM variant claimed
+every sequence as a site for every motif it returned. Shipping that meant
+producing plausible-looking tables that could not be reproduced by the tool they
+claimed to stand in for.
+
+So discovery is delegated, and this module holds the wrappers:
 
   * **HOMER**   — ``findMotifsGenome.pl`` / ``findMotifs.pl`` (de novo + known)
   * **MEME Suite** — ``meme``/``dreme``/``streme`` (de novo), ``fimo`` (scan),
     ``tomtom`` (compare)
   * **TOBIAS**  — TF footprint (``TOBIAS ScoreBigwig``)
 
-Each backend is only usable if the corresponding executable is present; a
-missing tool raises a clear ``ToolNotAvailableError`` telling the user how to
-install it, without breaking the core (dependency-free) path.
+None of these is a hard dependency of the package. Installing and importing
+easyepi, calling ``easyepi peaks``/``qc``/``dmr``/``annotate``, scanning a known
+PWM and testing known-motif enrichment all work with no external program
+present. What needs one says so: a missing executable raises
+``ToolNotAvailableError`` naming the install, instead of substituting a weaker
+implementation under the same filename.
 
 Usage:
     from easyepi.motifs.external_tools import (tool_available, run_meme_discovery,
@@ -195,6 +203,21 @@ def run_homer_motifs(target_fasta: str, bg_fasta: Optional[str], out_dir: str,
             + ". The exit status is 0 in this case, so this would otherwise be "
               "reported as a successful run producing no motifs. Add HOMER's bin "
               "directory to PATH (or pass homer_dir=...) and re-run.")
+
+    # HOMER also exits 0 when it rejects the input outright. With 3 sequences and
+    # a 4 bp motif it printed "!!! Something is wrong... are you sure you chose
+    # the right length" and "!!! Filtered out all motifs!!!", then "Job finished",
+    # exit 0, and a 0-byte motif file. Reported as success, that reads as "no
+    # motifs in this peak set", which is a different and wrong conclusion.
+    rejected = [line.strip() for line in combined.splitlines()
+                if line.strip().startswith("!!!")]
+    if rejected:
+        raise RuntimeError(
+            "HOMER rejected the input and still exited 0:\n  "
+            + "\n  ".join(rejected[:6])
+            + f"\nHOMER needs enough sequences for a -len {k} motif (a few "
+              "sequences are not enough to estimate a background). Supply more "
+              "peak sequences; the run was not a valid negative result.")
 
     return {
         "backend": "homer", "available": True,

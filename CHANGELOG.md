@@ -2,6 +2,64 @@
 
 ## 0.7.0 - unreleased
 
+### Added (site-level motif scanning)
+
+- **`easyepi.motifs.scan_sites`** returns every above-threshold site of a PWM
+  with its sequence index, start, end, strand, score and (optionally) p-value.
+  `scan_sequences` keeps one best score per sequence, which cannot answer "where",
+  "which strand" or "how confident", so a site table could not be produced from
+  it at all. Coordinates are 0-based half-open **offsets into the supplied
+  sequence**, stated explicitly because labelling an offset as a genomic position
+  is how a peak table ends up disagreeing with its BED file.
+  Thresholds come from the exact convolution of per-column scores when the motif
+  is at most 10 bp (4^10 outcomes) and from the binned distribution above that.
+
+### Fixed (motif formats and parsing)
+
+- **`write_meme` produced files no MEME Suite tool could read.** It wrote
+  `alength= <motif width>` instead of the alphabet size and transposed the matrix
+  into rows-per-base; FIMO rejected every file with "alphabet length value 10
+  which does not match the DNA alphabet length of 4". `read_meme` had the same
+  confusion in reverse, so easyepi round-tripped its own output while rejecting
+  spec-compliant third-party files. Both follow the format now, and a real FIMO
+  5.5.9 run accepts the output (15 sites on one motif, 11324 across 469).
+- **`.motif` files from a real HOMER install parsed to zero motifs.** The
+  extension dispatched to `read_homer`, which expects rows starting with a base
+  letter; all 469 files in a real `share/homer/motifs/` use the other layout
+  (`>consensus<TAB>info` then bare numeric rows). `read_motifs` now sniffs the
+  content, and an empty parse raises instead of silently returning `[]` — measured
+  0 motifs before, 469 after.
+- **`easyepi/__init__.py` still imported `discover_motifs`** after that function
+  was removed, which made the package unimportable from a clean interpreter.
+- **A perfectly matching site could be dropped by the threshold comparison.**
+  `pwm_score_distribution` bins the score axis and reports bin *edges*, so its
+  7.8248567 for a 4 bp PWM was 6.3e-4 above the raw sum of a perfect match
+  (7.8242266) and `score >= threshold` never fired. `scan_sites` now computes the
+  exact distribution for short motifs. A self-reverse-complementary motif is also
+  no longer reported twice, which had doubled every count an enrichment test saw.
+
+### Removed (motif discovery has no built-in engine)
+
+- **`easyepi/motifs/homer_like.py`, `de_novo_homer` and `discover_motifs` are
+  gone.** They were exploratory heuristics presented beside a real tool, and
+  measurement did not support keeping them: on real peak sequences the k-mer
+  counter shared a mean **3.90 bp** of consensus with HOMER's top ten — the
+  overlap expected from unrelated 8-10 bp motifs — and the EM variant returned
+  `AAAAAAAA` and `CCAGCCTG` as its best two motifs while reporting all 600
+  sequences as a site for every one. A reader of the output could not tell they
+  were not HOMER's.
+- De novo discovery now goes through HOMER only. `--backend native` is refused
+  with a message naming the alternatives rather than silently doing nothing, and
+  `--backend auto` no longer pretends to fall back: it either runs HOMER or
+  reports that HOMER is required.
+
+What still runs with no external program, and is unchanged: `read_pwm`,
+`scan_sequences` (numpy PWM scanning, compared against FIMO) and
+`known_motif_enrichment_homer` (scan + binomial tail + BH), which back
+`easyepi tf-annotate` and `easyepi motifs --pwm`/`--db`. HOMER is therefore a
+requirement of one analysis, not of the package: install, import, peaks, QC, DMR,
+annotation and known-motif enrichment all run without it.
+
 ### Fixed (external tools silently doing nothing)
 
 - **A HOMER run with missing helper programs was reported as success.** HOMER

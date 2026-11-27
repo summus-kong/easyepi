@@ -86,8 +86,7 @@ Historical build, cache and output directories have been removed from the workin
 | `easyepi/motifs/__init__.py` | PWM parsing and scanning, optional external motif tools and legacy utilities. |
 | `easyepi/motifs/external_tools.py` | Optional external motif-analysis tool backends. |
 | `easyepi/motifs/formats.py` | Motif format layer (L2): HOMER / JASPAR / MEME I/Os and cross-conversion. |
-| `easyepi/motifs/homer_like.py` | Legacy exploratory motif utilities retained for compatibility. |
-| `easyepi/motifs/homer_workflow.py` | Optional official HOMER delegation and legacy exploratory motif utilities. |
+| `easyepi/motifs/homer_workflow.py` | De novo discovery via HOMER, plus a numpy/scipy-only known-motif enrichment. |
 | `easyepi/motifs/logo.py` | Motif figure helpers: sequence logo + enrichment bar chart. |
 | `easyepi/normalize/__init__.py` | Signal / count normalization: library size, spike-in, RPGC, CPM. |
 | `easyepi/nucleosome/__init__.py` | Nucleosome occupancy / positioning analysis (native, dependency-free). |
