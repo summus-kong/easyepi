@@ -16,7 +16,7 @@ A standard local build is `python -m build`, after cleaning old build/egg metada
 
 ## Dependency policy
 
-The base package uses NumPy, SciPy, pandas and Matplotlib. Specialist extras are bam, bigwig, motif, stats, activity, enrich, plot, dev and all. External executables and databases are not bundled. Python modules never launch R. The activity adapter pins decoupler to the verified 1.9 API; review and test API changes before broadening that requirement.
+The base package uses NumPy, SciPy, pandas and Matplotlib. Specialist extras are activity, bam, bigwig, deseq2, dev, motif, states, stats, tobias, viz, and `all` (which unions them). `enrich` and `plot` were listed here historically but never existed in `pyproject.toml`; they are gone from this list rather than silently mapping to something else. External executables and databases are not bundled. Python modules never launch R. The activity adapter pins decoupler to the verified 1.9 API; review and test API changes before broadening that requirement.
 
 Do not publish a wheel from a dirty prior build directory. This document does not grant permission to upload to PyPI or create a remote release.
 

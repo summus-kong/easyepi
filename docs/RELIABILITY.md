@@ -38,7 +38,11 @@ Regression tests cover strand semantics, MACS3 commands, official ChromHMM argum
 
 The decoupler adapter was checked against the installed 1.9.2 implementation using synthetic measured matrices on the available development host. That host is outside the supported Linux runtime and required a numba environment adjustment for a local smoke check. No Windows-specific workaround was added to the package. A Linux CI workflow and environment specification are supplied; results remain pending until executed on Linux.
 
-ChromHMM command construction was checked against the [official manual](https://compbio.mit.edu/ChromHMM/ChromHMM_manual.pdf). MACS3, ChromHMM, MEME, HOMER, TOBIAS, BAM and BigWig analyses have not been benchmarked end to end on a real cohort during this audit. Command tests and reader mocks do not demonstrate output equivalence or biological validity.
+ChromHMM command construction was checked against the [official manual](https://compbio.mit.edu/ChromHMM/ChromHMM_manual.pdf).
+
+External-tool concordance is now measured for five of the six tools, with the numbers in `docs/dev/TOOL_COMPARISONS.md`. MACS3 output is byte-identical because `easyepi peaks` invokes MACS3 rather than reimplementing it. FIMO agrees on 11 of 12 best-motif sites (Spearman 1.000) and never on absolute score, because the two tools define the score differently. The TOBIAS ports reproduce the reference at machine precision at every layer that can be isolated -- scoring (1.8e-15), cut sites and k-mers (18/18), the sampled count matrices (0.000e+00) and `fast_rolling_math` (1e-12) -- but whole-track ATACorrect agreement is 0.999992 forward and 0.989637 reverse, and the reverse residual is unexplained; it is recorded as a known limitation rather than claimed as equivalent. ChromHMM was trained end to end on real ENCODE marks. HOMER remains PARTIAL: its installed genomes are absent, so only the FASTA path is exercised.
+
+What is still missing is a real cohort benchmark. Every comparison above uses a single ENCODE dataset, one chromosome or a synthetic fixture with a planted difference. Command tests and reader mocks still do not demonstrate biological validity.
 
 ## Remaining development priorities
 
