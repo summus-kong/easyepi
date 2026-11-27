@@ -106,8 +106,11 @@ nav:
       - Motif methods: MOTIF_BACKENDS.md
       - Method references: REFERENCES.md
       - Verification results: VERIFICATION.md
-      - Reliability and limitations: RELIABILITY.md
-      - Scope and evidence: INNOVATION.md
+  - Planning:
+      - Product roadmap: ROADMAP.md
+      - Validation plan: VALIDATION_PLAN.md
+      - Publication evidence: INNOVATION.md
+      - Risks and limitations: RELIABILITY.md
   - Contributing:
       - Development guide: DEVELOPMENT.md
       - Releasing: PUBLISHING.md
