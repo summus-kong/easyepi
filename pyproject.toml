@@ -72,16 +72,46 @@ stats = ["scikit-learn>=1.3"]
 # stated where it is produced (`differential/deseq2.py`): log2(A / B), so a
 # feature that doubles in group B reports about -1.
 deseq2 = ["pydeseq2>=0.5"]
+# `all` must union every extra above. It listed neither `hmmlearn` (states) nor
+# `matplotlib` (viz), so `pip install easyepi[all]` left `histone-states` raising
+# ModuleNotFoundError, and docs promised the opposite. Keep the two lists in step:
+# tests/test_release_metadata.py asserts it.
 all = [
     "pysam>=0.22",
     "pyBigWig>=0.3.22",
+    "matplotlib>=3.7",
+    "scikit-learn>=1.3",
+    "hmmlearn>=0.3",
+    "biopython>=1.81",
     "pydeseq2>=0.5",
     "decoupler>=1.9.2,<3",
     "anndata",
-    "biopython>=1.81",
-    "scikit-learn>=1.3",
     "mira-moods>=1.9",
 ]
+
+# External programs, declared so a caller can read the requirement instead of
+# discovering it from a stack trace. These are deliberately NOT extras: `pip`
+# cannot install MACS3 (a conda/bioconda package in practice) or HOMER, so an
+# extra that claims to would fail at install time and mislead. The values are the
+# versions this suite was exercised against; `easyepi doctor` style checks are
+# not implemented yet.
+[tool.easyepi.external]
+"macs3" = ">=3.0,<4"          # easyepi peaks (imported as a Python package)
+"homer" = ">=4.11"            # easyepi motifs, de novo discovery (-mknown)
+"meme-suite" = ">=5.5"        # easyepi motifs --pwm comparison oracle only
+"TOBIAS" = ">=0.17.5"         # easyepi footprint --engine tobias
+"chromhmm" = ">=1.23"         # easyepi chromhmm (external jar)
+"samtools" = ">=1.13"         # convenience: faidx for --genome-fasta
+"dss" = ">=2.58"              # R package, tests/oracle only
+
+# Modules that ship inside the package but are not on any runtime code path.
+# `easyepi/dmr_r.py` launches Rscript to test the beta-binomial port against the
+# real DSS; no `easyepi` subcommand imports it. Recording it here keeps the
+# "separate test scaffolding from product code" promise checkable instead of
+# living only in a document: tests/test_release_metadata.py asserts this table and
+# asserts the module has no hardcoded workstation path.
+[tool.easyepi.classification]
+test_bridge = ["easyepi.dmr_r"]
 
 [project.scripts]
 easyepi = "easyepi.cli:main"

@@ -1,12 +1,15 @@
 # easyepi
 
-Bulk epigenomics downstream analysis in pure Python. Every tool takes an aligned
-**BAM** and writes ordinary files — BigWig, BED, TSV, JSON, PNG. Peak calling imports
-MACS3, so that package must be installed; no other external program is
-needed, and no step depends on another having been run first.
+Bulk epigenomics downstream analysis in Python. Every tool takes an aligned
+**BAM** and writes ordinary files — BigWig, BED, TSV, JSON, PNG.
+
+The Python package installs from PyPI, but not every analysis behind it runs on
+Python alone: peak calling imports `macs3`, de novo motif discovery delegates to
+HOMER, and `chromhmm` drives ChromHMM's jar. The [Install](install.md) page lists
+what each command needs; nothing is downloaded at run time.
 
 ```bash
-pip install "easyepi[bam,viz]"
+pip install "easyepi[bam,viz,states]"
 easyepi bam2bw sample.bam -o tracks/ --assay atac
 easyepi peaks sample.bam -o peaks/ --assay atac
 ```

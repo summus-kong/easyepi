@@ -66,3 +66,38 @@ def test_motif_frequency_rows_are_acgt():
         # every column sums to ~1 (normalized frequency)
         colsum = m.matrix.sum(axis=0)
         assert np.allclose(colsum, 1.0, atol=1e-6)
+
+def test_which_tool_finds_an_executable_in_the_interpreter_prefix(tmp_path, monkeypatch):
+    """A conda-installed tool must be found even when its env is not activated.
+
+    On the analysis host `findMotifs.pl` lives in `<env>/bin` beside the running
+    `python`, but that directory is only on PATH after activation. Every entry
+    point that runs `python -m easyepi.cli` or a scheduler job therefore saw
+    `homer: False` with HOMER installed — and the advice that follows that answer
+    ("install HOMER") is wrong.
+    """
+    from easyepi.motifs import external_tools
+
+    fake_prefix = tmp_path / "env"
+    (fake_prefix / "bin").mkdir(parents=True)
+    exe = fake_prefix / "bin" / "findMotifs.pl"
+    exe.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    exe.chmod(0o755)
+
+    # PATH must not contain it, which is the whole point.
+    monkeypatch.setattr(external_tools.shutil, "which", lambda name: None)
+    monkeypatch.setattr(external_tools.sys, "prefix", str(fake_prefix))
+    monkeypatch.setattr(external_tools.sys, "base_prefix", str(fake_prefix))
+
+    found = external_tools.which_tool("findMotifs.pl")
+    assert found == str(exe), f"prefix search did not find {exe}; got {found}"
+    assert external_tools.tool_available("findMotifs.pl")
+
+
+def test_which_tool_still_reports_a_genuinely_absent_tool(monkeypatch):
+    """The prefix search must not turn a missing tool into a false positive."""
+    from easyepi.motifs import external_tools
+
+    monkeypatch.setattr(external_tools.shutil, "which", lambda name: None)
+    assert external_tools.which_tool("definitely-not-installed-xyz") is None
+    assert not external_tools.tool_available("definitely-not-installed-xyz")

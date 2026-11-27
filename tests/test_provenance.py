@@ -201,3 +201,41 @@ def test_a_complete_record_has_no_gaps(tmp_path):
     # Only the default tool list can produce gaps here; drop it.
     record["external_tools"] = {}
     assert provenance.describe_gaps(record) == []
+
+def test_resolve_searches_the_interpreter_prefix(tmp_path, monkeypatch):
+    """A conda tool must resolve even when its env was never activated.
+
+    `resolve`'s docstring already claimed this; the code did not do it, so a real
+    `easyepi motifs` run that invoked HOMER wrote `homer: not_found` into its own
+    status.json — a manifest that is wrong about a tool the run used.
+    """
+    from easyepi import provenance
+
+    prefix = tmp_path / "env"
+    (prefix / "bin").mkdir(parents=True)
+    exe = prefix / "bin" / "findMotifs.pl"
+    exe.write_text("#!/bin/sh\n", encoding="utf-8")
+
+    monkeypatch.setattr(provenance.shutil, "which", lambda name: None)
+    monkeypatch.setattr(provenance.sys, "prefix", str(prefix))
+    monkeypatch.setattr(provenance.sys, "base_prefix", str(prefix))
+
+    assert provenance.resolve("findMotifs.pl") == str(exe)
+    assert provenance.resolve("absent-tool-xyz") is None
+
+
+def test_package_versions_reports_the_running_source_version(monkeypatch):
+    """A source checkout must not be labelled with an older installed dist-info.
+
+    On the analysis host, 0.7.0 source recorded `easyepi: 0.1.0` because an
+    earlier editable install owned the metadata. The running code knows its own
+    version, so that is what the manifest must say.
+    """
+    import easyepi
+    from easyepi import provenance
+
+    monkeypatch.setattr(provenance, "version", lambda name: "0.1.0")
+    out = provenance.package_versions(["easyepi"])
+    # Imported from a source tree (this test runs from one), so __version__ wins.
+    assert out["easyepi"] == easyepi.__version__
+    assert out["easyepi"] != "0.1.0" or easyepi.__version__ == "0.1.0"

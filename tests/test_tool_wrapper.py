@@ -152,3 +152,82 @@ def test_describe_reports_a_validation_note():
     pw = ArgvPassthrough("macs3")
     pw.validation_error = "console script missing"
     assert "console script missing" in describe(pw)
+
+def test_homer_helper_not_found_is_not_reported_as_success(tmp_path, monkeypatch):
+    """HOMER exits 0 when its helper programs are missing; that is a failure.
+
+    Reproduced on the analysis host with HOMER installed as a conda package and
+    the environment not activated:
+
+        sh: fasta2tab.pl: command not found
+        sh: homer2: command not found
+        sh: findKnownMotifs.pl: command not found
+        sh: compareMotifs.pl: command not found
+        Job finished                              <- exit status 0
+        homerMotifs.all.motifs  (0 bytes)
+
+    `easyepi motifs --backend homer` accepted that and wrote `completed` beside an
+    empty motif file. Read as a result, it says "this peak set has no motifs",
+    which is the opposite of what happened. The wrapper must raise instead.
+    """
+    from easyepi.motifs import external_tools
+
+    fake_bin = tmp_path / "env" / "bin"
+    fake_bin.mkdir(parents=True)
+    exe = fake_bin / "findMotifs.pl"
+    exe.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    exe.chmod(0o755)
+
+    target = tmp_path / "t.fa"
+    bg = tmp_path / "b.fa"
+    target.write_text(">a\nACGTACGT\n", encoding="utf-8")
+    bg.write_text(">b\nACGTACGT\n", encoding="utf-8")
+    out = tmp_path / "out"
+
+    class _Proc:
+        returncode = 0
+        stdout = ("Selected Options:\n\tInput file = t.fa\n"
+                  "sh: homer2: command not found\n"
+                  "sh: findKnownMotifs.pl: command not found\n"
+                  "\tJob finished\n")
+        stderr = ""
+
+    monkeypatch.setattr(external_tools, "which_tool", lambda *a, **k: str(exe))
+    monkeypatch.setattr(external_tools, "_run", lambda *a, **k: _Proc())
+
+    (out / "homerResults").mkdir(parents=True)
+    (out / "homerMotifs.all.motifs").write_text("", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="helper programs were not found"):
+        external_tools.run_homer_motifs(str(target), str(bg), str(out))
+
+
+def test_homer_run_reports_the_motifs_it_found(tmp_path, monkeypatch):
+    """A real run must report how many motifs it produced, not just `available`."""
+    from easyepi.motifs import external_tools
+
+    fake_bin = tmp_path / "env" / "bin"
+    fake_bin.mkdir(parents=True)
+    exe = fake_bin / "findMotifs.pl"
+    exe.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    exe.chmod(0o755)
+    target = tmp_path / "t.fa"
+    bg = tmp_path / "b.fa"
+    target.write_text(">a\nACGTACGT\n", encoding="utf-8")
+    bg.write_text(">b\nACGTACGT\n", encoding="utf-8")
+    out = tmp_path / "out"
+
+    class _Proc:
+        returncode = 0
+        stdout = "\tJob finished\n"
+        stderr = ""
+
+    monkeypatch.setattr(external_tools, "which_tool", lambda *a, **k: str(exe))
+    monkeypatch.setattr(external_tools, "_run", lambda *a, **k: _Proc())
+
+    (out / "homerResults").mkdir(parents=True)
+    (out / "homerMotifs.all.motifs").write_text(
+        ">MOTIF1\nline\n>MOTIF2\nline\n>MOTIF3\nline\n", encoding="utf-8")
+
+    res = external_tools.run_homer_motifs(str(target), str(bg), str(out))
+    assert res["n_denovo_motifs"] == 3, res

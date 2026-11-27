@@ -1,13 +1,21 @@
 # easyepi
 
-Bulk epigenomics downstream analysis in pure Python. Every tool takes an aligned
-**BAM** and writes ordinary files (BigWig, BED, TSV, JSON, PNG). Peak calling imports
-MACS3, so that package must be installed; no other external program is
-needed, and no step depends on another having been run first.
+Bulk epigenomics downstream analysis in Python. Every tool takes an aligned
+**BAM** and writes ordinary files (BigWig, BED, TSV, JSON, PNG).
+
+The *Python* package installs from PyPI; not every analysis behind it runs on
+Python alone. Peak calling imports the `macs3` Python package, and de novo motif
+discovery delegates to HOMER, an external program. `Install` below gives the
+per-command requirements, and `docs/RELIABILITY.md` states what each method is
+and is not validated against. Nothing is fetched at run time.
 
 ```bash
-pip install -e ".[bam,viz]"      # pysam, pyBigWig, matplotlib, hmmlearn
+pip install -e ".[bam,viz,states]"   # pysam, pyBigWig, matplotlib, hmmlearn
 ```
+
+`states` is listed explicitly because `hmmlearn` is imported only by
+`easyepi histone-states`; the `viz` extra does not pull it in. The `all` extra
+unions every extra, `states` included.
 
 > **Documentation: <https://summus-kong.github.io/easyepi/>**
 >

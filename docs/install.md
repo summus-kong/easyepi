@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- Python 3.9 or newer (tested on 3.11)
+- Python 3.11 or newer (`requires-python = ">=3.11"`; CI runs 3.11 and 3.12)
 - Linux, macOS or Windows
 
 ## Core install

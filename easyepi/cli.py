@@ -734,8 +734,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_mo.add_argument("--background", default=None, help="background sequences FASTA")
     p_mo.add_argument("--db", default=None, help="known motif database (HOMER .motif / JASPAR .pfm / MEME .meme)")
     p_mo.add_argument("--k", type=int, default=8, help="de novo k-mer length (default 8)")
-    p_mo.add_argument("--backend", default="auto", choices=["auto", "native", "homer"],
-                      help="auto/homer require HOMER; native is a legacy exploratory method")
+    p_mo.add_argument(
+        "--backend", default="auto", choices=["auto", "native", "homer"],
+        help="auto/homer delegate to HOMER (and refuse if it is absent or fails); "
+             "native is an exploratory heuristic measuring a mean 3.90 bp of "
+             "consensus overlap with HOMER on real peaks, not a replacement")
     p_mo.add_argument("--homer-dir", default=None, help="path to HOMER share/homer dir (migrated install)")
     p_mo.add_argument("--out", required=True,
                    help="directory for the motif tables and figures plus status.json")

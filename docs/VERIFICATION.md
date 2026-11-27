@@ -19,6 +19,50 @@ Date: 2026-10-16. Supported deployment target: Linux. The available development 
 | Real-data external tool concordance | Not run; requires actual Linux data/tools |
 | Historical artifact deletion | Executed locally via `maintenance/clean_legacy.ps1 -Apply`; ignored build/cache/output trees removed from the working tree |
 
+## 2026-11-27 — analysis-host run, recorded in full
+
+Every earlier figure in this file is a snapshot from a different tree at a
+different time, and they disagree (`57`, `184`, `235`, `278`, `320`, `325`, `603`,
+`1117`). Rather than reconcile them by hand, this entry states exactly what was
+run so a later reader can tell which number belongs to which commit.
+
+| Field | Value |
+| --- | --- |
+| commit | `0a45ca3` plus the working-tree changes described in `CHANGELOG.md` (0.7.0) |
+| host | analysis server, `Linux-4.18.0-513.5.1.el8_9.x86_64` |
+| Python | 3.11.16 |
+| interpreter | conda env `easyepi`, Python 3.11.16 (path omitted: it names a private account) |
+| command | `PYTHONPATH=. python -m pytest tests -q` |
+| result | **1120 passed, 5 skipped, 10 warnings in 92.02s** |
+| skipped | 5 x `tests/test_beta_binomial_matches_dss.py` — `Rscript with DSS not available` |
+
+Dependency versions in that environment (read from the running interpreter, not
+from a lock file): numpy 2.2.6, scipy 1.17.1, pandas 2.3.3, pysam 0.24.0,
+pyBigWig 0.3.25, pydeseq2 0.5.4. `easyepi.__version__` 0.7.0; the installed
+dist-info in the same environment said 0.1.0, which is why `provenance` now
+prefers the running source's own version.
+
+### End-to-end external-tool checks in the same session
+
+| Tool | Command | Result |
+| --- | --- | --- |
+| HOMER 4.11 | `easyepi motifs --backend homer` on 300 real H3K27ac peak sequences (200 bp) with 300 random genomic background sequences, run from an **unactivated** environment | 16 de novo motifs and a populated `knownResults.txt` (top hit `DCCGCCGYHA`, P = 1e-5) |
+| MEME 5.5.9 | `meme peaks.fa -dna -mod zoops -nmotifs 5 -minw 6 -maxw 12` on 600 peak sequences | 5 motifs, E-values 3.8e-114 to 2.9e-87, **8 minutes** wall clock |
+| HOMER/MEME/TOBIAS/FIMO discovery | `discover_backends()` | all 7 reported available after the `sys.prefix` fix; 0 of 7 before it |
+
+The HOMER row is the reason two defects were found: before the fix the same
+command exited 0 and wrote a **0-byte** motif file, because every HOMER helper
+program was `command not found` yet HOMER still reported success.
+
+### What this entry does not establish
+
+It does not close the publication-level gaps in `RELIABILITY.md`. There is still
+no cohort-level comparison for differential peaks, no multi-cohort DMR comparison
+against DSS (the 5 skipped tests are exactly that, and R is absent on this host),
+no ATAC/ChIP QC validation against published filtering rules, and no scale test
+beyond the sizes quoted in `docs/dev/BENCHMARKS.md`. The HOMER and MEME figures
+above are one peak set each, not a cohort.
+
 ## Local environment details
 
 The unit suite used Python 3.11 with scikit-learn and Biopython installed in project-local verification directories. The real ULM smoke check used decoupler 1.9.2 with its numerical dependencies in a separate local directory. A host-specific numba setting was needed for that smoke check; no such setting is built into Easyepi. Linux is the only supported runtime.

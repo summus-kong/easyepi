@@ -2,6 +2,72 @@
 
 ## 0.7.0 - unreleased
 
+### Fixed (external tools silently doing nothing)
+
+- **A HOMER run with missing helper programs was reported as success.** HOMER
+  spawns `homer2`, `fasta2tab.pl`, `findKnownMotifs.pl`, `compareMotifs.pl` and
+  `homerTools` as bare shell commands and exits 0 when they are absent. Those
+  helpers live in the same directory as `findMotifs.pl`, which is on PATH only
+  when the conda environment is activated — so `python -m easyepi.cli motifs`
+  from an unactivated shell printed `sh: homer2: command not found` for every
+  step, wrote a 0-byte `homerMotifs.all.motifs`, and easyepi recorded
+  `completed`. Measured on 300 real H3K27ac peak sequences: 0 motifs reported,
+  16 produced once fixed. The wrapper now puts HOMER's own bin directory on PATH
+  and raises on any `command not found`, and it reports `n_denovo_motifs`.
+- **`discover_backends()` and `which_tool()` only searched PATH.** A
+  conda-installed HOMER, MEME Suite and TOBIAS all live in `<env>/bin` beside the
+  running interpreter, so on the analysis host every backend reported absent with
+  all of them installed and working. Both now search `sys.prefix` and
+  `sys.base_prefix`, and `tool_available` delegates to `which_tool` so the two
+  cannot disagree again.
+- **`provenance.resolve` had the same gap**, so a run that really invoked HOMER
+  wrote `homer: not_found` into its own `status.json`. Also fixed: on a source
+  checkout, `easyepi: <installed dist-info version>` was recorded instead of the
+  version of the code that ran (0.7.0 source recorded as 0.1.0).
+
+### Fixed (release consistency)
+
+- **`easyepi[all]` did not include `hmmlearn` or `matplotlib`.** Both README and
+  `PUBLISHING.md` describe `all` as the union of every extra, but the list omitted
+  `states` and `viz`, so `pip install easyepi[all]` left `easyepi histone-states`
+  raising `ModuleNotFoundError` — the one extra the install docs singled out.
+  Now unions every extra, and `tests/test_release_metadata.py` compares the
+  requirement names so a new extra cannot be forgotten.
+- **`README`'s install line annotated `hmmlearn` on `[bam,viz]`.** `viz` provides
+  matplotlib and scikit-learn; `hmmlearn` comes from `states`. The line now names
+  `[bam,viz,states]` and says why. `install.md` claimed Python 3.9 while
+  `requires-python` is `>=3.11`; corrected.
+- **CI's `EXTRAS` never received `tobias`.** The workflow comment asserted it
+  installed every extra, so the TOBIAS port tests skipped and the workflow's own
+  "no test may be silently skipped" step failed for the reason it exists. The
+  list is now compared against `pyproject.toml` by a test.
+- **`motifs --backend homer` degraded to the native heuristic on a nonzero HOMER
+  exit.** `RELIABILITY.md` claimed this fallback was removed; only the
+  tool-absent case was. A failed HOMER run now raises, so a caller can never
+  receive the exploratory numbers under the HOMER output filenames.
+- **`easyepi/dmr_r.py` hardcoded two absolute conda paths of one account.** It is
+  a DSS test bridge, not a runtime path, but those paths shipped in the wheel.
+  It now reads `EASYEPI_RSCRIPT` and falls back to `PATH`. `PUBLISHING.md`
+  stated "Python modules never launch R", which this module contradicts; the
+  statement now separates runtime from test-only code, and
+  `[tool.easyepi.classification]` records the bridge machine-readably.
+
+### Deprecated
+
+- **`easyepi motifs --backend native` now warns.** The function stays reachable
+  from the public API and from tests, so it is not removed; but on 600 real ATAC
+  peaks it returned `AAAAAAAA` and `CCAGCCTG` as its top two motifs and shared a
+  mean 3.90 bp of consensus with HOMER's top ten, which is the overlap expected
+  from unrelated 8-10 bp motifs. Pinned by measurement, not assertion.
+
+### Added (external tool declaration)
+
+- `[tool.easyepi.external]` in `pyproject.toml` names the external programs each
+  command needs (MACS3, HOMER, MEME Suite, TOBIAS, ChromHMM, samtools, DSS) with
+  the versions this suite was exercised against. They are deliberately not
+  extras: `pip` cannot install MACS3 or HOMER, so an extra promising to would
+  fail at install time and mislead.
+
 ### Added (reproducibility)
 
 - `easyepi/provenance.py`: input and output SHA-256, direct dependency

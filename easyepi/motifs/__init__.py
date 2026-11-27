@@ -203,6 +203,19 @@ def run_motifs(args) -> int:
     backend = getattr(args, "backend", "auto")
     homer_dir = getattr(args, "homer_dir", None)
 
+    if backend == "native":
+        # Deprecation rather than deletion: the function is reachable from the
+        # public API and from tests, so removing it would break callers. What it
+        # must not do is look equivalent to HOMER.
+        import warnings
+        warnings.warn(
+            "easyepi motifs --backend native is an exploratory heuristic, not a "
+            "HOMER equivalent: on 600 real ATAC peaks it returned 'AAAAAAAA' and "
+            "'CCAGCCTG' as its top motifs and shared a mean 3.90 bp of consensus "
+            "with HOMER's ten. Use --backend homer for analysis you intend to "
+            "report; this path will be removed in a future release.",
+            DeprecationWarning, stacklevel=2)
+
     # An explicitly supplied PWM always selects scanning.
     if fasta and not pwm_path and (background or backend in ("homer", "auto")):
         # If bg missing, we still allow HOMER's own background (or native with

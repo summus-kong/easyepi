@@ -23,7 +23,7 @@ Audit date: 2026-10-16. Scope: the active `easyepiv1` Python package, public mod
 | Motif enrichment | Every finite scan score considered a motif hit | Biopython PWM score thresholds, Fisher exact test and BH |
 | Motif scan | Ignored forward-only option and reverse-hit coordinate convention | Honor strand option and return forward-sequence coordinates |
 | External tools | Nonzero exit ignored; FIMO stdout discarded; MEME objective invalid | Raise on external failure, retain FIMO hits, use classic objective with ZOOPS model |
-| Motif workflow | Silent HOMER-to-native fallback and false equivalence claims | Missing HOMER fails; established tools recommended; native helpers marked exploratory |
+| Motif workflow | Silent HOMER-to-native fallback and false equivalence claims | Missing HOMER fails; established tools recommended; native helpers marked exploratory. A *nonzero* HOMER exit still fell through to native until 0.7.0 — the tool-absent case and the tool-failed case are now both fatal |
 | TF activity | Sequence-only motif averages described as chromVAR-like activity | decoupler ULM on measured feature matrices and a declared network |
 | ChromHMM | Headered CellMark, wrong BinarizeBed positional args, unused threads/seed | Official headerless table, peak mode, bin size, explicit paths, seed and processor options |
 | ChromHMM stages | Imported stage main did not set its stage; standalone training could not read prior binary output | Callable stage wrappers and `--binary-dir` |

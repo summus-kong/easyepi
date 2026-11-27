@@ -36,8 +36,14 @@ concurrency:
 # `deseq2` was missing here even though pyproject declares it, and
 # tests/test_deseq2_adapter.py skips without pydeseq2 — so this list, not the
 # test suite, was the reason the skip check failed.
+#
+# `tobias` was added to pyproject in 0.7.0 and never reached this list. The TOBIAS
+# port tests guard on scikit-learn/mira-moods, so they skipped; the "no test may be
+# silently skipped" step then failed for the reason it exists to catch.
+# `tests/test_release_metadata.py` now compares this list against pyproject, so a
+# new extra cannot be forgotten here again.
 env:
-  EXTRAS: "bam,viz,states,activity,motif,deseq2,dev"
+  EXTRAS: "bam,viz,states,activity,motif,deseq2,tobias,dev"
 
 jobs:
   test:

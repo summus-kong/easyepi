@@ -25,6 +25,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
@@ -39,24 +40,49 @@ class ToolNotAvailableError(RuntimeError):
 # Tool detection
 # ---------------------------------------------------------------------------
 def tool_available(name: str, extra_paths: Optional[Sequence[str]] = None) -> bool:
-    """Return True if an executable named ``name`` is found on PATH (or in
-    ``extra_paths``)."""
-    if shutil.which(name):
-        return True
-    for p in (extra_paths or []):
-        cand = os.path.join(p, name)
-        if os.path.isfile(cand) and os.access(cand, os.X_OK):
-            return True
-    return False
+    """Return True if an executable named ``name`` can be resolved.
+
+    Delegates to :func:`which_tool` so the two cannot disagree about what is
+    installed; they did, because this function had its own PATH-only copy of the
+    search and kept returning False after the shared search was widened.
+    """
+    return which_tool(name, extra_paths) is not None
+
+
+def _prefix_bin_dirs() -> List[str]:
+    """``bin`` directories belonging to the running interpreter, PATH or not.
+
+    A conda-installed tool (HOMER, MEME, TOBIAS) lands beside the interpreter
+    that will import this module. Its directory reaches PATH only when the
+    environment is activated, so `python -m easyepi.cli`, a cron job or a
+    scheduler submission would otherwise report an installed tool as missing. On
+    the analysis host that made `discover_backends()` return ``homer: False``
+    while ``<env>/bin/findMotifs.pl`` existed and ran.
+
+    ``sys.prefix`` is the environment root, and ``sys.base_prefix`` is the base
+    when a venv is layered over one, so both are checked.
+    """
+    dirs: List[str] = []
+    for prefix in (sys.prefix, getattr(sys, "base_prefix", sys.prefix)):
+        if not prefix:
+            continue
+        cand = os.path.join(prefix, "bin")
+        if cand not in dirs and os.path.isdir(cand):
+            dirs.append(cand)
+    return dirs
 
 
 def which_tool(name: str, extra_paths: Optional[Sequence[str]] = None) -> Optional[str]:
-    """Return the absolute path to an executable, or None if not found."""
+    """Return the absolute path to an executable, or None if not found.
+
+    Search order: PATH, then the interpreter's own prefix, then ``extra_paths``.
+    PATH stays first so an activated environment still wins.
+    """
     hit = shutil.which(name)
     if hit:
         return hit
-    for p in (extra_paths or []):
-        cand = os.path.join(p, name)
+    for directory in _prefix_bin_dirs() + [str(e) for e in (extra_paths or [])]:
+        cand = os.path.join(directory, name)
         if os.path.isfile(cand) and os.access(cand, os.X_OK):
             return cand
     return None
@@ -117,12 +143,24 @@ def run_homer_motifs(target_fasta: str, bg_fasta: Optional[str], out_dir: str,
         findmotifs = which_tool("findMotifs.pl", [os.path.join(hp, "bin")]) \
                      or which_tool("findMotifs.pl", [os.path.join(hp, "..", "bin")])
     else:
-        env = None
         findmotifs = which_tool("findMotifs.pl")
+        env = None
 
     if not findmotifs:
         raise ToolNotAvailableError(
             "HOMER findMotifs.pl not found. Install HOMER, or pass homer_dir=...")
+
+    # findMotifs.pl calls its helpers (homer2, fasta2tab.pl, findKnownMotifs.pl,
+    # compareMotifs.pl, homerTools) as bare commands through the shell. Those sit
+    # in the same directory as findMotifs.pl, which is on PATH only when the conda
+    # environment is activated -- `python -m easyepi.cli` from an unactivated
+    # shell, a cron job or a scheduler therefore left every helper "command not
+    # found". HOMER ignores that and still exits 0.
+    homer_bin = str(Path(findmotifs).resolve().parent)
+    base_path = (env or {}).get("PATH", os.environ.get("PATH", ""))
+    env = dict(env or {})
+    env.setdefault("PERL5LIB", str(Path(homer_bin).parent / "bin"))
+    env["PATH"] = homer_bin + os.pathsep + base_path if homer_bin not in base_path.split(os.pathsep) else base_path
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -133,11 +171,37 @@ def run_homer_motifs(target_fasta: str, bg_fasta: Optional[str], out_dir: str,
     if tmp_dir:
         env = dict(env or {}) | {"TMPDIR": str(tmp_dir)}
     res = _run(cmd, env=env)
+
+    # HOMER's own exit status does not cover its helpers: with every one of them
+    # missing it printed "sh: homer2: command not found" for each step, then
+    # "Job finished", and exited 0. Treating that as success wrote `completed`
+    # beside a 0-byte homerMotifs.all.motifs, which reads as "no motifs found".
+    combined = (res.stdout or "") + (res.stderr or "")
+    missing_helpers = sorted({
+        line.split(":")[0].strip().removeprefix("sh: ")
+        for line in combined.splitlines()
+        if "command not found" in line and line.strip().startswith("sh:")
+    })
+    motifs_file = out / "homerMotifs.all.motifs"
+    n_motifs = 0
+    if motifs_file.exists() and motifs_file.stat().st_size:
+        n_motifs = sum(1 for line in motifs_file.read_text(errors="replace").splitlines()
+                       if line.startswith(">"))
+
+    if missing_helpers:
+        raise RuntimeError(
+            "HOMER ran but its helper programs were not found on PATH: "
+            + ", ".join(missing_helpers)
+            + ". The exit status is 0 in this case, so this would otherwise be "
+              "reported as a successful run producing no motifs. Add HOMER's bin "
+              "directory to PATH (or pass homer_dir=...) and re-run.")
+
     return {
         "backend": "homer", "available": True,
         "command": " ".join(cmd), "returncode": res.returncode,
         "stderr": res.stderr[-2000:] if res.returncode else "",
         "out_dir": str(out),
+        "n_denovo_motifs": n_motifs,
     }
 
 

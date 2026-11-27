@@ -18,6 +18,7 @@ API notes (verified against DSS 2.58.0)
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import tempfile
@@ -26,11 +27,13 @@ from pathlib import Path
 
 import numpy as np
 
-#: Rscript locations tried before falling back to PATH.
-_CANDIDATE_ENVS = (
-    "/data1/GaoLab/houoweibo/soft/micromamba/root/envs/seurat5",
-    "/data1/GaoLab/houoweibo/soft/micromamba/root/envs/easyepi",
-)
+#: Environment variable naming an Rscript to try before PATH.
+#:
+#: This module used to probe two absolute paths under one account's conda root.
+#: Those are a single lab's filesystem compiled into a wheel anyone may install:
+#: they cannot help another user, and printing them on failure leaks the layout.
+#: A caller that keeps R outside PATH now says so with ``EASYEPI_RSCRIPT``.
+RSCRIPT_ENV_VAR = "EASYEPI_RSCRIPT"
 
 _R_SCRIPT = r"""
 data_path <- commandArgs(trailingOnly = TRUE)[1]
@@ -87,10 +90,14 @@ def find_rscript() -> str | None:
     repeatedly.
     """
     candidates: list[str] = []
-    for env in _CANDIDATE_ENVS:
-        cand = Path(env) / "bin" / "Rscript"
-        if cand.exists():
-            candidates.append(str(cand))
+    declared = os.environ.get(RSCRIPT_ENV_VAR)
+    if declared:
+        declared_path = Path(declared)
+        # Accept either the Rscript itself or an environment prefix.
+        for cand in (declared_path, declared_path / "bin" / "Rscript"):
+            if cand.is_file():
+                candidates.append(str(cand))
+                break
     on_path = shutil.which("Rscript")
     if on_path:
         candidates.append(on_path)

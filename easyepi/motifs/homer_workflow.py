@@ -296,17 +296,24 @@ def run_homer_workflow(peak_fasta: str, bg_fasta: Optional[str], out_dir: str,
     if use_homer and (known_motif_files or extra_pfm_dirs or homer_known):
         raise ValueError("Custom motif libraries are not forwarded to HOMER by this wrapper; use FIMO or HOMER directly")
     if use_homer:
-        try:
-            homer_result = ET.run_homer_motifs(
-                peak_fasta, bg_fasta, str(out), k=k, homer_dir=homer_dir)
-            if homer_result.get("returncode") == 0:
-                homer_result["backend"] = "homer"
-                return {**homer_result, "n_target": None,
-                        "n_background": None, "delegated": True}
-        except ET.ToolNotAvailableError:
-            raise
+        # A failed HOMER run raises. It used to fall through to the native path,
+        # so a user who asked for HOMER and got an error was quietly handed the
+        # exploratory heuristic's numbers under the same output filenames -- the
+        # one outcome the caller cannot detect. Only an absent executable is a
+        # different case, and that already raises ToolNotAvailableError.
+        homer_result = ET.run_homer_motifs(
+            peak_fasta, bg_fasta, str(out), k=k, homer_dir=homer_dir)
+        if homer_result.get("returncode") != 0:
+            raise RuntimeError(
+                "HOMER findMotifs.pl failed (exit "
+                f"{homer_result.get('returncode')}); refusing to fall back to the "
+                "exploratory native implementation, which is not equivalent. "
+                f"stderr: {homer_result.get('stderr', '')[-800:]}")
+        homer_result["backend"] = "homer"
+        return {**homer_result, "n_target": None, "n_background": None,
+                "delegated": True}
 
-    # --- Python-native path ---
+    # --- Exploratory Python-native path (explicitly selected only) ---
     target = read_fasta(peak_fasta)
     bg = read_fasta(bg_fasta) if bg_fasta else None
     if bg is None:
@@ -337,6 +344,11 @@ def run_homer_workflow(peak_fasta: str, bg_fasta: Optional[str], out_dir: str,
     return {
         "backend": "homer" if use_homer else "native",
         "delegated": bool(use_homer),
+        # Carried into the JSON a caller reads, not just the docstring: the two
+        # backends share filenames and a reader must be able to tell which one
+        # produced them.
+        "validated_equivalent_to": "none" if not use_homer else "HOMER",
+        "experimental": not use_homer,
         "out_dir": str(out),
         "n_target": len(target), "n_background": len(bg),
         "n_denovo": len(denovo), "n_known_tested": len(known),

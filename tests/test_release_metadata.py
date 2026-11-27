@@ -70,6 +70,127 @@ def test_packages_find_does_not_exclude_a_real_subpackage():
             "that subpackage would be missing from the wheel")
 
 
+def test_dmr_r_is_declared_a_test_bridge():
+    """Product code and test scaffolding are separated by a recorded fact.
+
+    `dmr_r.py` launches R, which the project promises no runtime path does. The
+    distinction lived only in prose; declaring it in metadata makes a review able
+    to check it, and makes it obvious if the module ever gains a runtime importer.
+    """
+    cfg = _pyproject()
+    declared = cfg["tool"]["easyepi"]["classification"]["test_bridge"]
+    assert "easyepi.dmr_r" in declared, (
+        "dmr_r is not classified as a test bridge; PUBLISHING documents it as one")
+
+    # No runtime module may import it. Match the import statement, not every
+    # mention: `dmr_replicate_aware` contains the substring and is real product
+    # code, so a naive search reported two false positives.
+    import re as _re
+    pattern = _re.compile(
+        r"^\s*(?:from|import)\s+easyepi\.dmr_r\b|"
+        r"^\s*from\s+\.\s*import\s+dmr_r\b",
+        _re.M)
+    runtime_importers = []
+    for path in (REPO / "easyepi").rglob("*.py"):
+        if path.name == "dmr_r.py":
+            continue
+        if pattern.search(path.read_text(encoding="utf-8")):
+            runtime_importers.append(str(path.relative_to(REPO)))
+    assert not runtime_importers, (
+        f"{runtime_importers} import dmr_r at runtime; it is a DSS test bridge, "
+        "not a supported analysis path")
+
+
+def test_all_extra_unions_every_other_extra():
+    """`all` promised to union every extra and did not include `hmmlearn`.
+
+    README and PUBLISHING both describe `all` as the union, so a user who
+    installed `easyepi[all]` and then ran `easyepi histone-states` got a
+    ModuleNotFoundError: the one extra the docs singled out was the one missing
+    from the union. Compare requirement *names*, not strings, so a version bump
+    is not a failure.
+    """
+    extras = _pyproject()["project"]["optional-dependencies"]
+    assert "all" in extras, "no `all` extra declared"
+
+    def names(requirements):
+        return {
+            re.split(r"[<>=!~\[; ]", req, maxsplit=1)[0].strip().lower()
+            for req in requirements
+        }
+
+    union = set()
+    for extra, requirements in extras.items():
+        if extra in {"all", "dev"}:
+            continue
+        union |= names(requirements)
+    missing = sorted(union - names(extras["all"]))
+    assert not missing, (
+        f"`all` does not include {missing}; docs describe it as the union of every "
+        "extra, so an install that follows them silently lacks a dependency")
+
+
+def test_ci_installs_every_optional_extra():
+    """The workflow claims to install every extra, so it must actually do so.
+
+    `tobias` was added to pyproject in 0.7.0 and never reached EXTRAS. The TOBIAS
+    port tests guard on their imports, so they skipped, and the workflow's own
+    "no test may be silently skipped" step is what caught it — after the comment
+    beside the list had already asserted the opposite.
+
+    The comparison is by *package name*, not by extra label: `bigwig` and `stats`
+    are aliases that `bam` and `viz` already satisfy (pyBigWig, scikit-learn), so
+    requiring the label would demand a redundant install while proving nothing
+    about what the runner actually has.
+    """
+    workflow = (REPO / ".github" / "workflows" / "linux.yml").read_text(encoding="utf-8")
+    match = re.search(r'EXTRAS:\s*"([^"]+)"', workflow)
+    assert match, "no EXTRAS list found in linux.yml"
+
+    extras = _pyproject()["project"]["optional-dependencies"]
+
+    def names(requirements):
+        return {
+            re.split(r"[<>=!~\[; ]", req, maxsplit=1)[0].strip().lower()
+            for req in requirements
+        }
+
+    installed_labels = {name.strip() for name in match.group(1).split(",") if name.strip()}
+    installed = set()
+    for label in installed_labels:
+        assert label in extras, f"linux.yml installs unknown extra {label!r}"
+        installed |= names(extras[label])
+
+    # `all` is a union, so it would satisfy everything and hide a gap.
+    required = set()
+    for label, requirements in extras.items():
+        if label == "all":
+            continue
+        required |= names(requirements)
+
+    missing = sorted(required - installed)
+    assert not missing, (
+        f"linux.yml installs no extra providing {missing}; tests that import them "
+        "would skip, and the workflow asserts that no test skips")
+
+
+def test_dmr_r_has_no_workstation_path():
+    """A packaged module must not hardcode one lab's filesystem.
+
+    `easyepi/dmr_r.py` is a test bridge to DSS, not a product code path, and it
+    searched two absolute paths under a specific account before falling back to
+    PATH. Those are host-specific guesses compiled into a wheel that anyone may
+    install. The module now reads `EASYEPI_RSCRIPT` and falls back to PATH only.
+    """
+    src = (REPO / "easyepi" / "dmr_r.py").read_text(encoding="utf-8")
+    offenders = [
+        line.strip()
+        for line in src.splitlines()
+        if ("/data1/" in line or "/home/" in line or "GaoLab" in line)
+    ]
+    assert not offenders, f"workstation-specific paths in dmr_r.py: {offenders}"
+
+
 def test_the_changelog_has_an_entry_for_the_current_version():
     declared = _pyproject()["project"]["version"]
     changelog = (REPO / "CHANGELOG.md").read_text(encoding="utf-8")

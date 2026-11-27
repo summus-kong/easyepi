@@ -137,6 +137,19 @@ def package_versions(names: Sequence[str] = DEFAULT_PACKAGES) -> dict[str, str]:
             out[name] = "not installed"
         except Exception:  # a broken dist-info must not abort the manifest
             out[name] = "unknown"
+
+    # `importlib.metadata` reports the *installed* distribution, which need not be
+    # the code that is running: on the analysis host a 0.7.0 source tree recorded
+    # `easyepi: 0.1.0` because an older editable install owned the dist-info.
+    # When easyepi itself is imported from a source tree, its own __version__ is
+    # the only honest answer, so it wins.
+    if "easyepi" in out:
+        import easyepi
+
+        module_file = Path(easyepi.__file__).resolve()
+        declared = getattr(easyepi, "__version__", None)
+        if declared and (module_file.parent.parent / "pyproject.toml").is_file():
+            out["easyepi"] = declared
     return out
 
 
@@ -169,6 +182,16 @@ def resolve(executable: str, search_paths: Sequence[str] = ()) -> str | None:
     found = shutil.which(executable)
     if found is not None:
         return found
+    # The interpreter's own prefix, before the caller's explicit paths: a
+    # conda-installed tool sits in `<env>/bin`, beside the python that runs this
+    # code, and reaches PATH only on activation. Without this a run that really
+    # used HOMER recorded `homer: not_found`, so the manifest was wrong about a
+    # tool the run depended on.
+    for prefix in (sys.prefix, getattr(sys, "base_prefix", sys.prefix)):
+        if prefix:
+            trial = Path(prefix) / "bin" / executable
+            if trial.is_file():
+                return str(trial)
     for directory in search_paths:
         trial = Path(directory) / executable
         if trial.is_file():

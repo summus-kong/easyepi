@@ -21,7 +21,24 @@ A standard local build is `python -m build`, after cleaning old build/egg metada
 
 ## Dependency policy
 
-The base package uses NumPy, SciPy, pandas and Matplotlib. Specialist extras are activity, bam, bigwig, deseq2, dev, motif, states, stats, tobias, viz, and `all` (which unions them). `enrich` and `plot` were listed here historically but never existed in `pyproject.toml`; they are gone from this list rather than silently mapping to something else. External executables and databases are not bundled. Python modules never launch R. The activity adapter pins decoupler to the verified 1.9 API; review and test API changes before broadening that requirement.
+The base package uses NumPy, SciPy, pandas and Matplotlib. Specialist extras are activity, bam, bigwig, deseq2, dev, motif, states, stats, tobias, viz, and `all` (which unions them). `enrich` and `plot` were listed here historically but never existed in `pyproject.toml`; they are gone from this list rather than silently mapping to something else. Tool discovery does not require an activated environment: executable lookup
+searches `PATH`, then the interpreter's own prefix, then any explicit
+`search_paths`. HOMER's helper programs are on PATH for the child process even
+when the parent shell never activated the environment, and a run in which HOMER
+reports a missing helper raises rather than reporting an empty result.
+
+External executables and databases are not bundled; `pyproject.toml` declares
+them under `[tool.easyepi.external]` so the requirement is readable rather than
+inferred from a failure. The analyses themselves are not all pure Python: peak
+calling imports `macs3`, `motifs` delegates de novo discovery to HOMER, and
+`chromhmm` drives ChromHMM's jar.
+
+No runtime code path launches R. `easyepi/dmr_r.py` does launch it, but it is a
+test bridge only: its single importer is `tests/test_beta_binomial_matches_dss.py`,
+which uses it to check the beta-binomial port against the real DSS package.
+`tools.dmr_r.legacy_dss_bridge` records this so the distinction is machine
+readable, and `tests/test_release_metadata.py` asserts both the classification and
+that the module carries no hardcoded workstation path. The activity adapter pins decoupler to the verified 1.9 API; review and test API changes before broadening that requirement.
 
 Do not publish a wheel from a dirty prior build directory. This document does not grant permission to upload to PyPI or create a remote release.
 
