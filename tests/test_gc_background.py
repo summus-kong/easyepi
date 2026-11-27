@@ -1,6 +1,8 @@
 """GC-matched background: FASTA parsing, window GC, matching, exclusions."""
 from __future__ import annotations
 
+import time
+
 import numpy as np
 import pytest
 
@@ -178,3 +180,135 @@ def _gc_of(windows, s, e):
         if ws == s and we == e:
             return gc
     return None
+
+# --------------------------------------------------------------------------
+# Targets wider than the sampling grid
+# --------------------------------------------------------------------------
+def test_a_target_wider_than_the_window_still_matches():
+    """The window is a grid step, not a ceiling on control width.
+
+    With a 200 bp grid, `window_width >= target_width` rejected every 400-1000 bp
+    target before the cross-window widening could run: measured 73/300 matched.
+    The eligibility test now only requires the interval to fit on the chromosome.
+    """
+    windows = {"chr1": [(i * 200, i * 200 + 200, 0.5) for i in range(200)]}
+    targets = [("chr1", i * 1000, i * 1000 + 600) for i in range(20)]
+
+    controls, summary = match_background(targets, windows, tolerance=0.1,
+                                         min_distance=0, seed=0)
+    assert summary["n_matched"] == len(targets), summary
+    for _c, cs, ce in controls:
+        assert ce - cs == 600, "control must be reported at the target width"
+
+
+def test_a_wide_control_is_contiguous_and_in_bounds():
+    windows = {"chr1": [(i * 200, i * 200 + 200, 0.5) for i in range(50)]}
+    targets = [("chr1", 2000, 2000 + 1000)]
+    controls, summary = match_background(targets, windows, tolerance=0.1,
+                                         min_distance=0, seed=1)
+    assert summary["n_matched"] == 1
+    _c, cs, ce = controls[0]
+    assert ce - cs == 1000
+    assert cs >= 0 and ce <= 10_000
+
+
+def test_target_too_close_to_the_chromosome_end_is_reported():
+    """No room to widen means no control -- reported, not silently truncated."""
+    windows = {"chr1": [(0, 200, 0.5), (200, 400, 0.5)]}
+    targets = [("chr1", 0, 500)]
+    controls, summary = match_background(windows=windows, targets=targets,
+                                         tolerance=0.1, min_distance=0, seed=0)
+    assert controls == []
+    assert summary["n_unmatched"] == 1
+
+
+def test_large_grid_completes_quickly():
+    """A chr1-scale grid must not take minutes.
+
+    The first version spent 62.9 s on 1.245M windows and 300 targets, almost all
+    of it in two places: a Python list over every matched candidate just to pick
+    one, and a full-array `max()` per target for a constant. Both are gone.
+    """
+    n = 200_000
+    rng = np.random.default_rng(0)
+    gcs = rng.uniform(0.30, 0.70, n)
+    windows = {"chr1": [(i * 200, i * 200 + 200, float(gcs[i])) for i in range(n)]}
+    targets = [("chr1", int(x), int(x) + 200)
+               for x in rng.integers(0, n * 200, 100)]
+
+    t0 = time.time()
+    controls, summary = match_background(targets, windows, tolerance=0.05,
+                                         min_distance=2000, seed=0)
+    elapsed = time.time() - t0
+
+    assert summary["n_matched"] > 0
+    # Generous: this test exists to catch a return to O(targets x windows), which
+    # was over a minute here, not to police a few hundred milliseconds.
+    assert elapsed < 30, f"{elapsed:.1f}s for {n} windows x {len(targets)} targets"
+
+def _interval_gc(rows, s0, e0):
+    """Independent recomputation, deliberately not using the module's helper."""
+    total = weighted = 0.0
+    for a, b, g in rows:
+        lo, hi = max(a, s0), min(b, e0)
+        if hi > lo:
+            total += hi - lo
+            weighted += g * (hi - lo)
+    return weighted / total if total else None
+
+
+def test_control_gc_is_within_tolerance_of_its_targets_interval_gc():
+    """Wide targets must be matched on interval GC, not on one window's GC.
+
+    Selecting on the starting window's GC left 4 of 197 controls outside the
+    tolerance their own report claims: a 600 bp control at 0.672 was paired with a
+    target whose interval GC was 0.615. The matching input has to be the same
+    quantity the report measures.
+    """
+    n = 20_000
+    rng = np.random.default_rng(1)
+    gcs = rng.uniform(0.30, 0.70, n)
+    rows = [(i * 200, i * 200 + 200, float(gcs[i])) for i in range(n)]
+    windows = {"chr1": rows}
+
+    rng2 = np.random.default_rng(2)
+    targets = []
+    for x in rng2.integers(0, n * 200, 150):
+        w = int(rng2.choice([200, 400, 600, 1000]))
+        targets.append(("chr1", int(x), int(x) + w))
+
+    controls, summary = match_background(targets, windows, tolerance=0.05,
+                                        min_distance=2000, seed=0)
+    assert summary["n_matched"] > 0
+
+    by_width = {}
+    for _c, ts, te in targets:
+        by_width.setdefault(te - ts, []).append(_interval_gc(rows, ts, te))
+
+    for _c, cs, ce in controls:
+        width = ce - cs
+        cg = _interval_gc(rows, cs, ce)
+        assert width in by_width, f"control width {width} matches no target"
+        nearest = min(abs(cg - tg) for tg in by_width[width] if tg is not None)
+        assert nearest <= 0.05 + 1e-9, (
+            f"control {cs}-{ce} GC {cg:.4f} is {nearest:.4f} from the nearest "
+            "same-width target, outside the 0.05 tolerance")
+
+
+def test_control_width_always_equals_a_target_width():
+    """A control must be the size of some target, not snapped to the grid."""
+    n = 5_000
+    rng = np.random.default_rng(5)
+    gcs = rng.uniform(0.3, 0.7, n)
+    rows = [(i * 200, i * 200 + 200, float(gcs[i])) for i in range(n)]
+    rng2 = np.random.default_rng(6)
+    targets = []
+    for x in rng2.integers(0, n * 200, 80):
+        w = int(rng2.choice([200, 400, 600, 1000]))
+        targets.append(("chr1", int(x), int(x) + w))
+
+    controls, _summary = match_background(targets, {"chr1": rows},
+                                          tolerance=0.05, min_distance=0, seed=0)
+    widths = {te - ts for _c, ts, te in targets}
+    for _c, cs, ce in controls:
+        assert (ce - cs) in widths, f"{ce - cs} is not any target width {widths}"

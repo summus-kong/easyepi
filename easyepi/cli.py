@@ -735,17 +735,46 @@ def build_parser() -> argparse.ArgumentParser:
     p_mo.add_argument("--db", default=None, help="known motif database (HOMER .motif / JASPAR .pfm / MEME .meme)")
     p_mo.add_argument("--k", type=int, default=8, help="de novo k-mer length (default 8)")
     p_mo.add_argument(
-        "--backend", default="auto", choices=["auto", "native", "homer"],
-        help="auto uses HOMER when installed and otherwise the built-in engine, "
-             "warning that the result is not HOMER-equivalent; homer requires "
-             "HOMER and fails without it; native always uses the built-in "
-             "engine. HOMER is optional: nothing needs to be installed to run "
-             "this command")
+        "--backend", default="auto", choices=["auto", "homer"],
+        help="de novo discovery runs HOMER; there is no built-in engine, so a "
+             "missing HOMER is reported instead of substituted. Scan a known PWM "
+             "with --pwm or test known enrichment with --db to avoid needing "
+             "any external program")
     p_mo.add_argument("--homer-dir", default=None, help="path to HOMER share/homer dir (migrated install)")
     p_mo.add_argument("--out", required=True,
                    help="directory for the motif tables and figures plus status.json")
     add_figure_args(p_mo)
     p_mo.set_defaults(func=_cmd_motifs)
+
+    p_bg = sub.add_parser(
+        "background",
+        help="GC- and length-matched control regions for an enrichment test")
+    p_bg.add_argument("--peaks", required=True,
+                      help="target regions (BED/narrowPeak/broadPeak)")
+    p_bg.add_argument("--genome-fasta", required=True,
+                      help="genome FASTA the regions are taken from")
+    p_bg.add_argument("--window", type=int, default=1000,
+                      help="width of the genome windows to sample controls from "
+                           "(default 1000)")
+    p_bg.add_argument("--tolerance", type=float, default=0.05,
+                      help="allowed absolute GC-fraction difference (default 0.05)")
+    p_bg.add_argument("--min-distance", type=int, default=2000,
+                      help="minimum bp between a control and any target or "
+                           "excluded region (default 2000)")
+    p_bg.add_argument("--exclude", default=None,
+                      help="BED of regions that can never be controls, e.g. an "
+                           "ENCODE blacklist")
+    p_bg.add_argument("--any-chrom", action="store_true",
+                      help="allow controls from a different chromosome; the "
+                           "default keeps them on the same chromosome")
+    p_bg.add_argument("--chromosomes", default=None,
+                      help="comma-separated chromosomes to consider")
+    p_bg.add_argument("--seed", type=int, default=0,
+                      help="sampling seed, recorded so a background is "
+                           "reproducible (default 0)")
+    p_bg.add_argument("--out", required=True,
+                      help="output BED for the matched control regions")
+    add_figure_args(p_bg)
 
     p_fp = sub.add_parser("footprint", help="TF footprint from accessibility signal")
     p_fp.add_argument("--bigwig", required=True, help="per-base accessibility/cut bigWig")
@@ -1136,6 +1165,9 @@ def main(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
+        if args.module == "background":
+            from easyepi.background_cli import run_background
+            return run_background(args)
         if args.module in {"qc", "normalize", "annotate", "motifs", "footprint",
                            "nucleosome", "diff", "viz", "integrate", "washu",
                            "tf-annotate", "nucleosome-positioning", "gene-panel"}:

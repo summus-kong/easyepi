@@ -2,6 +2,43 @@
 
 ## 0.7.0 - unreleased
 
+### Added (`easyepi background`: matched control regions, with the match checked)
+
+- **`easyepi background`** builds GC- and length-matched control regions and writes
+  them as BED plus a JSON report. The report is the point: "GC-matched background"
+  is a claim a reader cannot verify from a control BED alone, so the JSON carries
+  the two GC and length distributions, a Kolmogorov-Smirnov test on each, the
+  fraction of targets that received a control, the seed, and an explicit list of
+  what was *not* matched (mappability, repeat content, chromatin state,
+  accessibility). A match rate below 80% produces a warning in the payload,
+  because dropping the hard targets biases whatever comparison follows.
+- `easyepi/background_report.py` holds the distribution comparison; it says "not
+  measured" when no sequences were supplied rather than reporting a GC test it
+  never ran.
+
+### Fixed (`gc_background.match_background`)
+
+Measured on 300 real H3K27ac peaks, chr1, before and after:
+
+- **Controls were matched on the wrong quantity.** The target's GC was taken from
+  the single window containing its midpoint, while the control was matched on its
+  whole interval — different numbers for any region wider than a grid window.
+  Recomputing the true interval GC showed 144 of 197 controls outside the 0.05
+  tolerance their own report claimed. Both sides now use the exact interval GC,
+  and a control is exactly the target's width instead of being snapped to the grid
+  (which had made 119 of 197 widths differ from their target's).
+- **Wide targets could not match at all.** With a grid step narrower than the
+  target, the eligibility test rejected every candidate, so 73% of a real peak set
+  matched and every 7.7 kb peak failed. Now 100%.
+- **It took 62.9 s for 1.245M windows and 300 targets**, nearly all of it in two
+  of this module's own constructs: a Python list over every matched candidate to
+  select one element, and a full-array `max()` per target for a value that never
+  changes. Both replaced with O(1) work per target: **2.5 s**.
+- The distance test is now a sorted-interval query instead of an outer product.
+  Equivalence with the previous predicate was checked on 5000 randomised inputs
+  (0 mismatches), including that `min_distance=0` still excludes nothing — the
+  old behaviour, preserved deliberately because callers depend on it.
+
 ### Added (site-level motif scanning)
 
 - **`easyepi.motifs.scan_sites`** returns every above-threshold site of a PWM
