@@ -111,6 +111,7 @@ nav:
   - Contributing:
       - Development guide: DEVELOPMENT.md
       - Releasing: PUBLISHING.md
+      - Scale and biological benchmarks: dev/BENCHMARKS.md
       - DSS replacement notes: dev/DSS_REPLACEMENT_PLAN.md
 
 extra:
