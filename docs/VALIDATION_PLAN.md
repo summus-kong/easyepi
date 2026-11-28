@@ -155,7 +155,36 @@ peak set was used together with a report of the distributions.
 | Metric | rank correlation of enrichment across motifs; overlap of the top 10; stability of a motif's rank between backgrounds |
 | Threshold | ρ ≥ 0.80 against HOMER; the top-10 overlap reported; any rank move > 20 positions between backgrounds is reported with its cause |
 | Covered | the binomial test and BH correction; the sequence as the statistical unit |
-| Not covered | a HOMER comparison; the sensitivity analysis across backgrounds |
+| Not covered | a HOMER comparison; a second cohort |
+| **Sensitivity (measured)** | `scripts/bench_background_sensitivity.py` compares unmatched, GC/length-matched and accessibility-matched backgrounds on the same targets and motifs |
+Measured on 300 real H3K27ac peaks (chr1), 120 HOMER motifs, three backgrounds:
+
+| Background | GC target / bg | KS p (GC) | n matched |
+| --- | --- | --- | --- |
+| genomic (unmatched) | 0.520 / 0.396 | 7e-30 | 300/300 |
+| GC + length matched | 0.520 / 0.507 | 0.342 | 300/300 |
+| accessible + GC + length | 0.520 / 0.509 | 0.174 | 297/300 |
+
+Spearman rho of the enrichment ranking between configurations, and the top-10
+overlap:
+
+| Comparison | rho | top-10 overlap |
+| --- | --- | --- |
+| genomic vs GC+length | **0.343** | 2/10 |
+| genomic vs accessible | **0.422** | 3/10 |
+| GC+length vs accessible | **0.196** | — |
+
+Largest single-motif moves, competing-null to matched:
+
+```
+AP-2gamma(AP2)    rank   1 -> 113   (+112)
+ETS:E-box         rank  12 -> 117   (+105)
+DUX(Homeobox)     rank 113 ->  16   ( -97)
+```
+
+The unmatched null's top hit, AP-2gamma at log P 12.97, falls to rank 113 once the
+background is GC-matched. That is what "enrichment" measured when the null was
+mostly-AT-rich sequence: composition, not binding.
 | Known limit | the per-motif site threshold is not a cross-motif FDR, and the two are corrected by different mechanisms. Reporting one as the other would be a statistical error. |
 
 ### 3.4 De novo discovery

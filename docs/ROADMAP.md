@@ -210,14 +210,17 @@ step has different evidence needs and none substitutes for another.
   per-motif site threshold is not a cross-motif FDR, and the output does not
   currently separate the two.
 - **Approach** State the unit, the threshold provenance and the correction scope in
-  the payload; run the sensitivity analysis in
-  [VALIDATION_PLAN.md](VALIDATION_PLAN.md) §3.3 over mismatched, GC/length-matched
-  and accessibility-matched backgrounds.
-- **Depends on** 3.1 for the accessibility arm.
+  the payload; report rankings under every available background and the change
+  between them.
+- **Depends on** 3.1 for the accessibility arm — satisfied.
 - **Done when** Two backgrounds that differ only in matching produce a reported
-  change in ranking, and the output names which background was used.
+  change in ranking, and the output names which background was used — **DONE**, and
+  the change is large (rho 0.343 between unmatched and GC-matched; the unmatched
+  null's top hit falls to rank 113).
 - **Risk** A ranking that is stable across backgrounds may reflect strong biology
-  or a weak test; stability alone is not correctness.
+  or a weak test; stability alone is not correctness. And the measurement shows the
+  ranking is *not* stable, so a published ranking without its background is
+  uninterpretable — that is now a documented requirement, not a caveat.
 
 ### 3.4 De novo discovery via external tools
 
