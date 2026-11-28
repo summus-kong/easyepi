@@ -63,6 +63,19 @@ def _per_motif_model(pwm: np.ndarray, bg_seqs: Sequence[str],
     return float(np.percentile(bg_scores, 100 * threshold_frac))
 
 
+def _percentile_floor(scores: np.ndarray, threshold_frac: float) -> float:
+    """High percentile of already-computed background scores, as a hit floor.
+
+    Split out of :func:`_per_motif_model` so callers that hold the background
+    scores do not scan the background again to obtain them.
+    """
+    finite = np.asarray(scores, dtype=np.float64)
+    finite = finite[np.isfinite(finite)]
+    if finite.size == 0:
+        return float("inf")
+    return float(np.percentile(finite, 100 * threshold_frac))
+
+
 def _log_p_binomial(hits: int, n: int, p0: float) -> float:
     """-log10 binomial upper-tail P(X >= hits) given hit rate p0."""
     from scipy.stats import binom
@@ -121,11 +134,14 @@ def known_motif_enrichment_homer(target_seqs: Sequence[str], bg_seqs: Sequence[s
     rows: List[Dict] = []
     for m in motifs:
         pwm = m.to_log_odds()
-        # Background-derived floor threshold (per-motif null), if requested.
-        floor = _per_motif_model(pwm, bg, bg_model_threshold) if bg_model_threshold < 1.0 else -np.inf
-        thr = max(floor, mscore)
         t_scores = np.asarray(scan_sequences(pwm, target)["scores"], dtype=np.float64)
         b_scores = np.asarray(scan_sequences(pwm, bg)["scores"], dtype=np.float64)
+        # Background-derived floor threshold (per-motif null), if requested.
+        # Computed from the scores just taken rather than by scanning the
+        # background a second time: the percentile of an array is the same
+        # number whether or not you recompute the array first.
+        floor = _percentile_floor(b_scores, bg_model_threshold) if bg_model_threshold < 1.0 else -np.inf
+        thr = max(floor, mscore)
         t_hit = t_scores >= thr
         b_hit = b_scores >= thr
 

@@ -22,6 +22,54 @@ from easyepi.motifs import logo  # noqa: F401
 _BASES = "ACGT"
 _BASE_TO_I = {b: i for i, b in enumerate(_BASES)}
 
+# Byte -> base index, 255 for anything that is not a base. A 256-entry table
+# turns the per-character dict lookup into one vectorised gather, which matters
+# because the scan encodes every base of every sequence for every motif.
+_BYTE_TO_I = np.full(256, 255, dtype=np.uint8)
+for _b, _i in _BASE_TO_I.items():
+    _BYTE_TO_I[ord(_b)] = _i
+    _BYTE_TO_I[ord(_b.lower())] = _i
+# Complement lookup on base indices (A<->T, C<->G); only valid for 0..3.
+_COMPLEMENT = np.array([3, 2, 1, 0], dtype=np.uint8)
+
+
+def _encode(seq: str) -> tuple:
+    """Sequence -> (base indices 0..3, valid mask). Non-ACGT bases are invalid."""
+    raw = np.frombuffer(seq.encode("ascii", "replace"), dtype=np.uint8)
+    idx = _BYTE_TO_I[raw]
+    valid = idx != 255
+    if not valid.all():
+        idx = idx.copy()
+        idx[~valid] = 0
+    return idx, valid
+
+
+def _window_scores(idx: np.ndarray, valid: np.ndarray,
+                   pwm: np.ndarray) -> "np.ndarray | None":
+    """Score every window of one strand without materialising (n_windows, L).
+
+    score[k] = sum_d pwm[idx[k+d], d] for windows with no invalid base, else
+    -inf. Accumulating one offset at a time keeps the working set at n bases
+    rather than n*L.
+    """
+    L = pwm.shape[1]
+    n = idx.shape[0]
+    if n < L:
+        return None
+    out = np.zeros(n - L + 1, dtype=np.float64)
+    rows = pwm.T                       # (L, 4); rows[d] indexes bases at offset d
+    bad = None
+    for d in range(L):
+        span = slice(d, n - L + 1 + d)
+        out += rows[d][idx[span]]
+        if bad is None:
+            bad = ~valid[span]
+        else:
+            bad |= ~valid[span]
+    if bad.any():
+        out[bad] = -np.inf
+    return out
+
 
 def read_pwm(path: Path, pseudocount: float = 0.01) -> np.ndarray:
     """Parse a JASPAR-style position frequency matrix (4 x L) into log-odds.
@@ -67,37 +115,28 @@ def scan_sequences(pwm: np.ndarray, seqs, reverse_complement: bool = True,
     if pwm.ndim != 2 or pwm.shape[0] != 4 or pwm.shape[1] == 0 or not np.isfinite(pwm).all():
         raise ValueError("PWM must be a finite (4, length) matrix")
     L = pwm.shape[1]
-    comp = {"A": "T", "C": "G", "G": "C", "T": "A"}
-    rc = lambda s: "".join(comp.get(c, "N") for c in reversed(s))  # noqa: E731
 
     scores = []
     pos_list = []
     strand_list = []
     for seq in seqs:
-        seq = str(seq).upper()
+        idx, valid = _encode(str(seq).upper())
+        n = idx.shape[0]
         best = -np.inf
         best_p, best_strand = -1, "+"
-        for strand, s in ((("+", seq), ("-", rc(seq))) if reverse_complement else (("+", seq),)):
-            # encode to int indices; mask invalid (N) positions
-            idx = np.array([_BASE_TO_I.get(c, -1) for c in s], dtype=np.int64)
-            if len(idx) < L:
-                continue
-            valid = idx != -1
-            # sliding windows of length L → (n_windows, L)
-            windows = _sliding_windows(idx, L)
-            # gather PWM scores for each window: (n_windows, L) → sum
-            # map idx -> pwm value; invalid (-1) contributes 0 (masked below)
-            wm = windows.copy()
-            wm[wm == -1] = 0
-            window_scores = pwm[wm, np.arange(L)].sum(axis=1)
-            # mask windows containing an invalid base
-            window_valid = _sliding_windows(valid.astype(np.int64), L).min(axis=1).astype(bool)
-            window_scores[~window_valid] = -np.inf
-            if window_scores.size:
-                pos = int(np.argmax(window_scores))
-                sc = float(window_scores[pos])
-                if sc > best:
-                    best, best_p, best_strand = sc, (pos if strand == "+" else len(seq) - pos - L), strand
+        ws = _window_scores(idx, valid, pwm)
+        if ws is not None and ws.size and np.isfinite(ws).any():
+            k = int(np.argmax(ws))
+            if ws[k] > best:
+                best, best_p, best_strand = float(ws[k]), k, "+"
+        if reverse_complement and n >= L:
+            # reverse complement: reverse the order and complement each base; the
+            # validity pattern reverses with it, so stop markers stay aligned
+            ws = _window_scores(_COMPLEMENT[idx[::-1]], valid[::-1], pwm)
+            if ws is not None and ws.size and np.isfinite(ws).any():
+                k = int(np.argmax(ws))
+                if ws[k] > best:
+                    best, best_p, best_strand = float(ws[k]), n - k - L, "-"
         scores.append(best)
         pos_list.append(best_p)
         strand_list.append(best_strand)
