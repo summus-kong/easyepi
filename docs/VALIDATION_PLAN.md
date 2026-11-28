@@ -150,12 +150,42 @@ peak set was used together with a report of the distributions.
 
 | Item | Value |
 | --- | --- |
-| Data | the same real peak sets as 3.1, with three backgrounds: unmatched genomic, GC/length-matched, and (once implemented) accessibility-matched |
-| Reference | HOMER `knownResults.txt` under the same sequence sets |
-| Metric | rank correlation of enrichment across motifs; overlap of the top 10; stability of a motif's rank between backgrounds |
-| Threshold | ρ ≥ 0.80 against HOMER; the top-10 overlap reported; any rank move > 20 positions between backgrounds is reported with its cause |
-| Covered | the binomial test and BH correction; the sequence as the statistical unit |
-| Not covered | a HOMER comparison; a second cohort |
+| Implementation | **AME 5.5.9** (MEME Suite), called from `easyepi.motifs.ame_enrichment`. The test (`--ame-method`) and scoring (`--ame-scoring`) are recorded in every result |
+| Data | the same real peak sets as 3.1, with three backgrounds: unmatched genomic, GC/length-matched, and accessibility-matched |
+| Reference | HOMER `knownResults.txt`, plus FIMO, under the same sequence sets |
+| Metric | rank correlation of enrichment across motifs; overlap of the top 20; stability of a motif's rank between backgrounds |
+| Threshold | **not met, and withdrawn**: agreement with HOMER was the original gate (ρ ≥ 0.80) and four implementations failed it for reasons that turned out not to be implementation defects — see below |
+| Covered | delegation to the published tool; argument validation; control-set requirement; the exact invocation is written into the output |
+| Not covered | a second cohort; a calibrated p-value that does not depend on the partition choice |
+
+**Why the HOMER-agreement gate was withdrawn.** Four implementations were compared on
+identical input (300 peaks, 300 background sequences, 449 motifs):
+
+| Implementation | Wall time | rho(hit rate) vs HOMER | rho(log P) vs HOMER |
+| --- | --- | --- | --- |
+| local scan + binomial | 77 s | 0.109 | 0.237 |
+| port of HOMER's own hypergeometric + threshold search | 88 s | 0.120 | 0.206 |
+| FIMO scan + the same hypergeometric | 89 s | 0.169 | 0.233 |
+| **AME 5.5.9 (fisher / avg)** | **5 s** | — | 0.396 (n=144) |
+
+FIMO against the local scan directly, with the same test applied to both, reaches
+only rho 0.292 on hit rates and 0.435 on log P, with 6/20 top-20 overlap. Two
+independent standard scanners therefore disagree with each other about as much as
+either disagrees with HOMER. The ranking is set by scanner and partition choice, not
+by which implementation is correct, so "match HOMER" was not a reachable target and
+no amount of local reimplementation was going to reach it.
+
+The concrete reason HOMER cannot be reproduced by a standard scan was also measured.
+For Sp1 on this input HOMER reports 30/300 target hits and **0/300** background hits;
+a direct PWM scan of the same background sequences cannot produce 0 hits at any
+threshold, and the best pair it can reach (169, 30) scores *more* significant
+(log P 34.89) than HOMER's own answer (17.21). HOMER scores background sequence
+through its own k-mer subsystem, so the disagreement starts in the scanner, before
+any statistic is applied. The source was read to confirm this
+(`Motif2.cpp:1300` threshold search, `Motif2.cpp:4707` hypergeometric, `Motif2.cpp:900`
+background rescaling), and a direct port of `loghypergeoD` was checked against scipy
+on 3000 random tables (max |log difference| 1.7e-12) — the formula was never the
+problem.
 | **Sensitivity (measured)** | `scripts/bench_background_sensitivity.py` compares unmatched, GC/length-matched and accessibility-matched backgrounds on the same targets and motifs |
 Measured on 300 real H3K27ac peaks (chr1), 120 HOMER motifs, three backgrounds:
 
@@ -185,6 +215,7 @@ DUX(Homeobox)     rank 113 ->  16   ( -97)
 The unmatched null's top hit, AP-2gamma at log P 12.97, falls to rank 113 once the
 background is GC-matched. That is what "enrichment" measured when the null was
 mostly-AT-rich sequence: composition, not binding.
+| Known limit | AME partitions sequences by affinity score; HOMER searches a threshold. They answer overlapping but different questions, so a p-value from one is not interchangeable with the other even at the same nominal threshold. The 6 tests x 4 scorings AME offers do not agree with each other either, which is why both are recorded rather than fixed. |
 | Known limit | the per-motif site threshold is not a cross-motif FDR, and the two are corrected by different mechanisms. Reporting one as the other would be a statistical error. |
 
 ### 3.4 De novo discovery

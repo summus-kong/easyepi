@@ -134,7 +134,11 @@ def test_chromhmm_with_no_arguments_prints_usage_and_exits_zero(tmp_path):
     if not (CHROMHMM_JAR and has_java):
         pytest.skip("ChromHMM not available")
     code, text = _run(["java", "-mx2000M", "-jar", CHROMHMM_JAR[0], "BinarizeBed"])
-    assert text.lstrip().startswith("usage BinarizeBed"), text[:300]
+    # A newer JVM prints "-mx option is deprecated" to stdout before the banner, so
+    # anchoring at the start of the text tested the JVM version rather than
+    # ChromHMM. What this test is about is that the usage is shown and the exit
+    # code is 0; the surrounding noise is not the subject.
+    assert "usage BinarizeBed" in text, text[:300]
     assert code == 0, "measured: the usage banner exits 0"
 
 
