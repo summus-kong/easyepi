@@ -727,12 +727,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_an.set_defaults(func=_cmd_annotate)
 
     p_mo = sub.add_parser("motifs", help="motif discovery and footprint")
-    p_mo.add_argument("--peaks", required=True,
-                       help="peak file scanned for motif enrichment")
+    p_mo.add_argument(
+        "--peaks", default=None,
+        help="peak file the run is about. Required when motifs are discovered de "
+             "novo (the regions come from it); not needed for --pwm scanning or "
+             "for --db enrichment, which take their sequences from --fasta and "
+             "record --peaks only as provenance")
     p_mo.add_argument("--pwm", default=None, help="JASPAR .pfm PWM file")
     p_mo.add_argument("--fasta", default=None, help="peak sequences FASTA (target)")
     p_mo.add_argument("--background", default=None, help="background sequences FASTA")
-    p_mo.add_argument("--db", default=None, help="known motif database (HOMER .motif / JASPAR .pfm / MEME .meme)")
+    p_mo.add_argument("--db", default=None,
+                      help="known motif database (HOMER .motif dir, JASPAR .pfm or "
+                           "MEME .meme). Enrichment runs through AME; non-MEME input "
+                           "is converted first")
     p_mo.add_argument("--k", type=int, default=8, help="de novo k-mer length (default 8)")
     p_mo.add_argument(
         "--backend", default="auto", choices=["auto", "homer"],
@@ -741,6 +748,14 @@ def build_parser() -> argparse.ArgumentParser:
              "with --pwm or test known enrichment with --db to avoid needing "
              "any external program")
     p_mo.add_argument("--homer-dir", default=None, help="path to HOMER share/homer dir (migrated install)")
+    p_mo.add_argument(
+        "--ame-method", default="fisher",
+        choices=["fisher", "3dmhg", "4dmhg", "ranksum", "pearson", "spearman"],
+        help="AME statistical test for known-motif enrichment (default fisher)")
+    p_mo.add_argument(
+        "--ame-scoring", default="avg",
+        choices=["avg", "max", "sum", "totalhits"],
+        help="AME sequence scoring for known-motif enrichment (default avg)")
     p_mo.add_argument("--out", required=True,
                    help="directory for the motif tables and figures plus status.json")
     add_figure_args(p_mo)

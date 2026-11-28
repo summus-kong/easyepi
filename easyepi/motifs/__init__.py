@@ -9,6 +9,7 @@ program installed.
 
 from __future__ import annotations
 
+import tempfile
 from collections import Counter
 from itertools import product
 from pathlib import Path
@@ -425,6 +426,7 @@ def scan_sites(pwm: np.ndarray, seqs, *, fpr: float | None = 1e-4,
 
 
 def run_motifs(args) -> int:
+    """Scan a PWM, run de novo discovery, or test enrichment via AME."""
     """Run motif discovery or known-motif enrichment on the supplied sequences."""
     from easyepi.motifs.homer_workflow import run_homer_workflow
     import json
@@ -439,6 +441,10 @@ def run_motifs(args) -> int:
     k = getattr(args, "k", 8)
     backend = getattr(args, "backend", "auto")
     homer_dir = getattr(args, "homer_dir", None)
+    # AME exposes 6 tests x 4 scorings that do not agree with each other, so the
+    # choice is surfaced rather than fixed, and recorded in the result.
+    ame_method = getattr(args, "ame_method", "fisher")
+    ame_scoring = getattr(args, "ame_scoring", "avg")
 
     # `native` used to select a built-in de novo engine. That engine has been
     # removed, so the flag now exists only to explain itself: silently doing
@@ -447,8 +453,16 @@ def run_motifs(args) -> int:
     # knows de novo has no engine; nothing is warned here, because the error is
     # the complete answer.
 
-    # An explicitly supplied PWM always selects scanning.
-    if fasta and not pwm_path and (background or backend in ("homer", "auto")):
+    # Dispatch order matters. A supplied --db means known-motif enrichment, which
+    # is a different question from de novo discovery; gating on --background first
+    # sent every --db run into HOMER and silently ignored the database.
+    if not pwm_path and not motif_db and fasta and (
+            background or backend in ("homer", "auto")):
+        if not getattr(args, "peaks", None):
+            raise ValueError(
+                "de novo discovery needs --peaks: the regions to analyse come "
+                "from it. Pass --db with --background for known-motif enrichment, "
+                "or --pwm for a scan, if you only have sequences.")
         # A missing background is passed through as None: HOMER rejects FASTA
         # mode without one, and the workflow turns that into the message the
         # caller sees. There is no target-as-null fallback any more.
@@ -475,11 +489,23 @@ def run_motifs(args) -> int:
             raise ValueError(
                 "Known motif enrichment requires an explicit background FASTA "
                 "(--background); without one there is no null to test against")
-        from easyepi.motifs import homer_workflow as HW
-        motifs = formats.read_motifs(Path(motif_db))
-        rows = HW.known_motif_enrichment_homer(seqs, bg_seqs, motifs)
-        res.update({"mode": "known_enrichment", "n_seqs": len(seqs),
-                    "n_motifs_tested": len(motifs), "motifs": rows})
+        # Delegated to AME: it is the published tool for this test and states its
+        # own method and scoring, which a local reimplementation could not.
+        from easyepi.motifs.ame_enrichment import ame_enrichment
+        db_path = Path(motif_db)
+        if db_path.suffix.lower() in (".meme", ".txt") and db_path.is_file():
+            meme_db = str(db_path)
+        else:
+            # HOMER ships a directory of .motif files; JASPAR .pfm is a single
+            # file. AME reads neither, so both are converted to MEME first.
+            meme_db = _meme_database(db_path)
+        try:
+            ame = ame_enrichment(seqs, bg_seqs, meme_db,
+                                 method=ame_method, scoring=ame_scoring)
+        finally:
+            _release_converted()
+        res.update({"mode": "known_enrichment_ame", "n_seqs": len(seqs),
+                    "ame": ame, "motifs": ame["motifs"]})
     else:
         raise ValueError(
             "Nothing to do. Pass --pwm for a scan, --db with --background for "
@@ -488,6 +514,67 @@ def run_motifs(args) -> int:
     out.write_text(json.dumps(res, indent=2, default=lambda x: x.tolist() if hasattr(x, "tolist") else x), encoding="utf-8")
     print(f"[easyepi] motif analysis written to {out}")
     return 0
+
+
+# Conversions create a temporary MEME database that must outlive the AME
+# subprocess but not the call. A module-level holder makes the lifetime explicit
+# instead of relying on garbage collection of a TemporaryDirectory that was
+# returned by value and dropped.
+_CONVERTED_HOLD: list = []
+
+
+def _meme_database(db_path: Path) -> str:
+    """Return a path to a MEME file for ``db_path``, converting if necessary.
+
+    Accepts a directory (HOMER's share/homer/motifs layout), a single *.motif or
+    *.pfm file, or an existing MEME file, which is passed through untouched.
+    """
+    import glob
+    from easyepi.motifs import formats as _f
+
+    if db_path.is_file() and db_path.suffix.lower() in (".meme", ".txt"):
+        return str(db_path)
+
+    motifs = []
+    seen = set()
+    if db_path.is_dir():
+        paths = []
+        for pattern in ("*.motif", "*.motifs", "*.pfm", "*.meme"):
+            paths.extend(sorted(glob.glob(str(db_path / pattern))))
+    else:
+        paths = [str(db_path)]
+
+    for path in paths:
+        try:
+            for m in _f.read_motifs(Path(path)):
+                key = str(m.name)
+                if key in seen:
+                    continue
+                seen.add(key)
+                motifs.append(m)
+        except Exception:
+            continue
+
+    if not motifs:
+        raise ValueError(
+            f"no readable motifs found in {db_path}; supported inputs are a HOMER "
+            "motif directory, a JASPAR .pfm file, or a MEME .meme file")
+
+    tmp = tempfile.TemporaryDirectory()
+    target = Path(tmp.name) / "motifs.meme"
+    _f.write_meme(motifs, target)
+    _CONVERTED_HOLD.append(tmp)   # released by the caller in its finally block
+    return str(target)
+
+
+def _release_converted() -> None:
+    """Delete any temporary MEME database created for an AME run."""
+    while _CONVERTED_HOLD:
+        tmp = _CONVERTED_HOLD.pop()
+        try:
+            tmp.cleanup()
+        except Exception:
+            pass
 
 
 def _read_sequences(path) -> list:

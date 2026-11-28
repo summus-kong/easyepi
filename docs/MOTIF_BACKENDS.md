@@ -5,7 +5,7 @@
 | Matched control regions | `easyepi background` | NumPy, SciPy | GC- and length-matched controls plus a report of how well they matched. Accessibility is **not** matched |
 | Single best PWM match | `easyepi.motifs.scan_sequences`, `universal.motif_scan` | NumPy | Best sequence score and orientation |
 | All sites above a threshold | `easyepi.motifs.scan_sites` | NumPy | Per-site coordinates, strand, score and p-value, as offsets into the supplied sequence |
-| Known-motif sequence-set enrichment | `easyepi.motifs.homer_workflow.known_motif_enrichment_homer`, `universal.motif_enrichment` | NumPy, SciPy (Biopython optional) | Thresholded sequence presence; binomial or Fisher exact + BH. The sequence is the unit, and the per-motif threshold is not a cross-motif FDR |
+| Known-motif sequence-set enrichment | `easyepi.motifs.ame_enrichment.ame_enrichment` (what `easyepi motifs --db` calls) | MEME Suite (`ame`); non-MEME databases converted automatically | AME partitions sequences by affinity and reports its own p, adj-p and E-value. The test (`--ame-method`, 6 choices) and scoring (`--ame-scoring`, 4 choices) are recorded in the result because they do not agree with each other |
 | De novo discovery | `easyepi motifs --backend homer` | HOMER | HOMER's own output. There is no built-in engine and no fallback |
 | De novo via MEME or FIMO | `universal.motif_analysis --backend meme/fimo/homer` | MEME Suite or HOMER | Official tool output, written under the run directory |
 | Regulator activity | `universal.tf_activity` | decoupler 1.9 | ULM t-statistics from a measured matrix and a declared network. Not chromVAR |
@@ -14,6 +14,30 @@
 The PFM parser accepts one plain or labelled JASPAR matrix. Uniform-background PWM thresholds from Biopython are model-specific; the per-strand false positive rate is not a genome-wide FDR. Matching sequence length, GC, accessibility, mappability and the tested universe remains the user's responsibility. Genomic annotation and motif database labels answer different questions.
 
 ULM is the published decoupler method. A motif-peak network may estimate motif-associated accessibility, but it does not implement chromVAR background deviations or establish direct binding. Supply measured normalized features and a biologically justified network. TFs with indistinguishable motifs cannot be resolved using motif identity alone.
+
+### Why enrichment runs through AME
+
+Four implementations were measured on the same 300 peaks and 300 background
+sequences, and against each other:
+
+| implementation | wall time | rank correlation with HOMER |
+| --- | --- | --- |
+| local scan + binomial | 77 s | rho(hit rate) 0.109, rho(log P) 0.237 |
+| port of HOMER's own hypergeometric and threshold search | 88 s | 0.120 / 0.206 |
+| FIMO scan + the same hypergeometric | 89 s | 0.169 / 0.233 |
+| **AME 5.5.9 (fisher / avg)** | **5 s** | 0.396 (n=144) |
+
+FIMO and the local scan, compared directly to each other, reach only rho 0.292 on
+hit rates and 0.435 on log P. Two independent standard scanners therefore disagree
+with each other about as much as either disagrees with HOMER: the ranking is set by
+scanner and partition choices, not by which implementation is "correct". Chasing
+numerical agreement with one tool was the wrong objective, so the method was
+delegated to the published tool for the question instead of reimplemented.
+
+What this does **not** claim: results are not numerically identical to HOMER. AME
+partitions sequences by affinity score, HOMER searches a threshold. They answer
+overlapping but different questions, which is why the test and scoring are written
+into the output rather than left implicit.
 
 Native de novo helpers were **removed** on 2026-11-27; they are not kept as
 compatibility functions. `easyepi/motifs/homer_like.py`, `de_novo_homer` and
